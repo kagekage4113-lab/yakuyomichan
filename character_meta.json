@@ -1,0 +1,1008 @@
+{
+  "7ffcb7ce-00ec-4bdc-82cd-45a8889e43ff": {
+    "display_name": "四国めたん",
+    "icon_file": "7ffcb7ce-00ec-4bdc-82cd-45a8889e43ff.png",
+    "gender": "女性",
+    "genre_tags": [
+      "上品系",
+      "ツンデレ"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 2,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 0,
+        "style_name": "あまあま"
+      },
+      {
+        "style_id": 6,
+        "style_name": "ツンツン"
+      },
+      {
+        "style_id": 4,
+        "style_name": "セクシー"
+      },
+      {
+        "style_id": 36,
+        "style_name": "ささやき"
+      },
+      {
+        "style_id": 37,
+        "style_name": "ヒソヒソ"
+      }
+    ]
+  },
+  "388f246b-8c41-4ac1-8e2d-5d79f3ff56d9": {
+    "display_name": "ずんだもん",
+    "icon_file": "388f246b-8c41-4ac1-8e2d-5d79f3ff56d9.png",
+    "gender": "中性",
+    "genre_tags": [
+      "元気系",
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 3,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 1,
+        "style_name": "あまあま"
+      },
+      {
+        "style_id": 7,
+        "style_name": "ツンツン"
+      },
+      {
+        "style_id": 5,
+        "style_name": "セクシー"
+      },
+      {
+        "style_id": 22,
+        "style_name": "ささやき"
+      },
+      {
+        "style_id": 38,
+        "style_name": "ヒソヒソ"
+      },
+      {
+        "style_id": 75,
+        "style_name": "ヘロヘロ"
+      },
+      {
+        "style_id": 76,
+        "style_name": "なみだめ"
+      }
+    ]
+  },
+  "35b2c544-660e-401e-b503-0e14c635303a": {
+    "display_name": "春日部つむぎ",
+    "icon_file": "35b2c544-660e-401e-b503-0e14c635303a.png",
+    "gender": "女性",
+    "genre_tags": [
+      "元気系",
+      "明るい"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 8,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "3474ee95-c274-47f9-aa1a-8322163d96f1": {
+    "display_name": "雨晴はう",
+    "icon_file": "3474ee95-c274-47f9-aa1a-8322163d96f1.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 10,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "b1a81618-b27b-40d2-b0ea-27a9ad408c4b": {
+    "display_name": "波音リツ",
+    "icon_file": "b1a81618-b27b-40d2-b0ea-27a9ad408c4b.png",
+    "gender": "中性",
+    "genre_tags": [
+      "クール",
+      "低音"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 9,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 65,
+        "style_name": "クイーン"
+      }
+    ]
+  },
+  "c30dc15a-0992-4f8d-8bb8-ad3b314e6a6f": {
+    "display_name": "玄野武宏",
+    "icon_file": "c30dc15a-0992-4f8d-8bb8-ad3b314e6a6f.png",
+    "gender": "男性",
+    "genre_tags": [
+      "爽やか系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 11,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 39,
+        "style_name": "喜び"
+      },
+      {
+        "style_id": 40,
+        "style_name": "ツンギレ"
+      },
+      {
+        "style_id": 41,
+        "style_name": "悲しみ"
+      }
+    ]
+  },
+  "e5020595-5c5d-4e87-b849-270a518d0dcf": {
+    "display_name": "白上虎太郎",
+    "icon_file": "e5020595-5c5d-4e87-b849-270a518d0dcf.png",
+    "gender": "男性",
+    "genre_tags": [
+      "幼い系",
+      "明るい"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 12,
+        "style_name": "ふつう"
+      },
+      {
+        "style_id": 32,
+        "style_name": "わーい"
+      },
+      {
+        "style_id": 33,
+        "style_name": "びくびく"
+      },
+      {
+        "style_id": 34,
+        "style_name": "おこ"
+      },
+      {
+        "style_id": 35,
+        "style_name": "びえーん"
+      }
+    ]
+  },
+  "4f51116a-d9ee-4516-925d-21f183e2afad": {
+    "display_name": "青山龍星",
+    "icon_file": "4f51116a-d9ee-4516-925d-21f183e2afad.png",
+    "gender": "男性",
+    "genre_tags": [
+      "低音",
+      "クール"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 13,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 81,
+        "style_name": "熱血"
+      },
+      {
+        "style_id": 82,
+        "style_name": "不機嫌"
+      },
+      {
+        "style_id": 83,
+        "style_name": "喜び"
+      },
+      {
+        "style_id": 84,
+        "style_name": "しっとり"
+      },
+      {
+        "style_id": 85,
+        "style_name": "かなしみ"
+      },
+      {
+        "style_id": 86,
+        "style_name": "囁き"
+      }
+    ]
+  },
+  "8eaad775-3119-417e-8cf4-2a10bfd592c8": {
+    "display_name": "冥鳴ひまり",
+    "icon_file": "8eaad775-3119-417e-8cf4-2a10bfd592c8.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系",
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 14,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "481fb609-6446-4870-9f46-90c4dd623403": {
+    "display_name": "九州そら",
+    "icon_file": "481fb609-6446-4870-9f46-90c4dd623403.png",
+    "gender": "女性",
+    "genre_tags": [
+      "お姉さん系",
+      "上品系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 16,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 15,
+        "style_name": "あまあま"
+      },
+      {
+        "style_id": 18,
+        "style_name": "ツンツン"
+      },
+      {
+        "style_id": 17,
+        "style_name": "セクシー"
+      },
+      {
+        "style_id": 19,
+        "style_name": "ささやき"
+      }
+    ]
+  },
+  "9f3ee141-26ad-437e-97bd-d22298d02ad2": {
+    "display_name": "もち子さん",
+    "icon_file": "9f3ee141-26ad-437e-97bd-d22298d02ad2.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 20,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 66,
+        "style_name": "セクシー／あん子"
+      },
+      {
+        "style_id": 77,
+        "style_name": "泣き"
+      },
+      {
+        "style_id": 78,
+        "style_name": "怒り"
+      },
+      {
+        "style_id": 79,
+        "style_name": "喜び"
+      },
+      {
+        "style_id": 80,
+        "style_name": "のんびり"
+      }
+    ]
+  },
+  "1a17ca16-7ee5-4ea5-b191-2f02ace24d21": {
+    "display_name": "剣崎雌雄",
+    "icon_file": "1a17ca16-7ee5-4ea5-b191-2f02ace24d21.png",
+    "gender": "男性",
+    "genre_tags": [
+      "渋め系",
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 21,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "67d5d8da-acd7-4207-bb10-b5542d3a663b": {
+    "display_name": "WhiteCUL",
+    "icon_file": "67d5d8da-acd7-4207-bb10-b5542d3a663b.png",
+    "gender": "女性",
+    "genre_tags": [
+      "クール"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 23,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 24,
+        "style_name": "たのしい"
+      },
+      {
+        "style_id": 25,
+        "style_name": "かなしい"
+      },
+      {
+        "style_id": 26,
+        "style_name": "びえーん"
+      }
+    ]
+  },
+  "0f56c2f2-644c-49c9-8989-94e11f7129d0": {
+    "display_name": "後鬼",
+    "icon_file": "0f56c2f2-644c-49c9-8989-94e11f7129d0.png",
+    "gender": "女性",
+    "genre_tags": [
+      "お姉さん系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 27,
+        "style_name": "人間ver."
+      },
+      {
+        "style_id": 28,
+        "style_name": "ぬいぐるみver."
+      },
+      {
+        "style_id": 87,
+        "style_name": "人間（怒り）ver."
+      },
+      {
+        "style_id": 88,
+        "style_name": "鬼ver."
+      }
+    ]
+  },
+  "044830d2-f23b-44d6-ac0d-b5d733caa900": {
+    "display_name": "No.7",
+    "icon_file": "044830d2-f23b-44d6-ac0d-b5d733caa900.png",
+    "gender": "女性",
+    "genre_tags": [
+      "クール",
+      "上品系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 29,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 30,
+        "style_name": "アナウンス"
+      },
+      {
+        "style_id": 31,
+        "style_name": "読み聞かせ"
+      }
+    ]
+  },
+  "468b8e94-9da4-4f7a-8715-a22a48844f9e": {
+    "display_name": "ちび式じい",
+    "icon_file": "468b8e94-9da4-4f7a-8715-a22a48844f9e.png",
+    "gender": "男性",
+    "genre_tags": [
+      "渋め系",
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 42,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "0693554c-338e-4790-8982-b9c6d476dc69": {
+    "display_name": "櫻歌ミコ",
+    "icon_file": "0693554c-338e-4790-8982-b9c6d476dc69.png",
+    "gender": "女性",
+    "genre_tags": [
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 43,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 44,
+        "style_name": "第二形態"
+      },
+      {
+        "style_id": 45,
+        "style_name": "ロリ"
+      }
+    ]
+  },
+  "a8cc6d22-aad0-4ab8-bf1e-2f843924164a": {
+    "display_name": "小夜/SAYO",
+    "icon_file": "a8cc6d22-aad0-4ab8-bf1e-2f843924164a.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系",
+      "ハキハキ"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 46,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "882a636f-3bac-431a-966d-c5e6bba9f949": {
+    "display_name": "ナースロボ＿タイプＴ",
+    "icon_file": "882a636f-3bac-431a-966d-c5e6bba9f949.png",
+    "gender": "女性",
+    "genre_tags": [
+      "幼い系",
+      "クール"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 47,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 48,
+        "style_name": "楽々"
+      },
+      {
+        "style_id": 49,
+        "style_name": "恐怖"
+      },
+      {
+        "style_id": 50,
+        "style_name": "内緒話"
+      }
+    ]
+  },
+  "471e39d2-fb11-4c8c-8d89-4b322d2498e0": {
+    "display_name": "†聖騎士 紅桜†",
+    "icon_file": "471e39d2-fb11-4c8c-8d89-4b322d2498e0.png",
+    "gender": "男性",
+    "genre_tags": [
+      "爽やか系",
+      "ハキハキ"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 51,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "0acebdee-a4a5-4e12-a695-e19609728e30": {
+    "display_name": "雀松朱司",
+    "icon_file": "0acebdee-a4a5-4e12-a695-e19609728e30.png",
+    "gender": "男性",
+    "genre_tags": [
+      "爽やか系",
+      "渋め系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 52,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "7d1e7ba7-f957-40e5-a3fc-da49f769ab65": {
+    "display_name": "麒ヶ島宗麟",
+    "icon_file": "7d1e7ba7-f957-40e5-a3fc-da49f769ab65.png",
+    "gender": "男性",
+    "genre_tags": [
+      "渋め系",
+      "低音"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 53,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "ba5d2428-f7e0-4c20-ac41-9dd56e9178b4": {
+    "display_name": "春歌ナナ",
+    "icon_file": "ba5d2428-f7e0-4c20-ac41-9dd56e9178b4.png",
+    "gender": "女性",
+    "genre_tags": [
+      "元気系",
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 54,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "00a5c10c-d3bd-459f-83fd-43180b521a44": {
+    "display_name": "猫使アル",
+    "icon_file": "00a5c10c-d3bd-459f-83fd-43180b521a44.png",
+    "gender": "男性",
+    "genre_tags": [
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 55,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 56,
+        "style_name": "おちつき"
+      },
+      {
+        "style_id": 57,
+        "style_name": "うきうき"
+      },
+      {
+        "style_id": 110,
+        "style_name": "つよつよ"
+      },
+      {
+        "style_id": 111,
+        "style_name": "へろへろ"
+      }
+    ]
+  },
+  "c20a2254-0349-4470-9fc8-e5c0f8cf3404": {
+    "display_name": "猫使ビィ",
+    "icon_file": "c20a2254-0349-4470-9fc8-e5c0f8cf3404.png",
+    "gender": "女性",
+    "genre_tags": [
+      "幼い系",
+      "明るい"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 58,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 59,
+        "style_name": "おちつき"
+      },
+      {
+        "style_id": 60,
+        "style_name": "人見知り"
+      },
+      {
+        "style_id": 112,
+        "style_name": "つよつよ"
+      }
+    ]
+  },
+  "1f18ffc3-47ea-4ce0-9829-0576d03a7ec8": {
+    "display_name": "中国うさぎ",
+    "icon_file": "1f18ffc3-47ea-4ce0-9829-0576d03a7ec8.png",
+    "gender": "女性",
+    "genre_tags": [
+      "幼い系",
+      "上品系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 61,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 62,
+        "style_name": "おどろき"
+      },
+      {
+        "style_id": 63,
+        "style_name": "こわがり"
+      },
+      {
+        "style_id": 64,
+        "style_name": "へろへろ"
+      }
+    ]
+  },
+  "04dbd989-32d0-40b4-9e71-17c920f2a8a9": {
+    "display_name": "栗田まろん",
+    "icon_file": "04dbd989-32d0-40b4-9e71-17c920f2a8a9.png",
+    "gender": "男性",
+    "genre_tags": [
+      "低音"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 67,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "dda44ade-5f9c-4a3a-9d2c-2a976c7476d9": {
+    "display_name": "あいえるたん",
+    "icon_file": "dda44ade-5f9c-4a3a-9d2c-2a976c7476d9.png",
+    "gender": "女性",
+    "genre_tags": [
+      "ハキハキ",
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 68,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "287aa49f-e56b-4530-a469-855776c84a8d": {
+    "display_name": "満別花丸",
+    "icon_file": "287aa49f-e56b-4530-a469-855776c84a8d.png",
+    "gender": "中性",
+    "genre_tags": [
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 69,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 70,
+        "style_name": "元気"
+      },
+      {
+        "style_id": 71,
+        "style_name": "ささやき"
+      },
+      {
+        "style_id": 72,
+        "style_name": "ぶりっ子"
+      },
+      {
+        "style_id": 73,
+        "style_name": "ボーイ"
+      }
+    ]
+  },
+  "97a4af4b-086e-4efd-b125-7ae2da85e697": {
+    "display_name": "琴詠ニア",
+    "icon_file": "97a4af4b-086e-4efd-b125-7ae2da85e697.png",
+    "gender": "女性",
+    "genre_tags": [
+      "明るい",
+      "上品系"
+    ],
+    "is_favorite": true,
+    "styles": [
+      {
+        "style_id": 74,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "0ebe2c7d-96f3-4f0e-a2e3-ae13fe27c403": {
+    "display_name": "Voidoll",
+    "icon_file": "0ebe2c7d-96f3-4f0e-a2e3-ae13fe27c403.png",
+    "gender": "女性",
+    "genre_tags": [
+      "ロボット系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 89,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "0156da66-4300-474a-a398-49eb2e8dd853": {
+    "display_name": "ぞん子",
+    "icon_file": "0156da66-4300-474a-a398-49eb2e8dd853.png",
+    "gender": "女性",
+    "genre_tags": [
+      "ハキハキ",
+      "元気系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 90,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 91,
+        "style_name": "低血圧"
+      },
+      {
+        "style_id": 92,
+        "style_name": "覚醒"
+      },
+      {
+        "style_id": 93,
+        "style_name": "実況風"
+      }
+    ]
+  },
+  "4614a7de-9829-465d-9791-97eb8a5f9b86": {
+    "display_name": "中部つるぎ",
+    "icon_file": "4614a7de-9829-465d-9791-97eb8a5f9b86.png",
+    "gender": "女性",
+    "genre_tags": [
+      "クール"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 94,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 95,
+        "style_name": "怒り"
+      },
+      {
+        "style_id": 96,
+        "style_name": "ヒソヒソ"
+      },
+      {
+        "style_id": 97,
+        "style_name": "おどおど"
+      },
+      {
+        "style_id": 98,
+        "style_name": "絶望と敗北"
+      }
+    ]
+  },
+  "3b91e034-e028-4acb-a08d-fbdcd207ea63": {
+    "display_name": "離途",
+    "icon_file": "3b91e034-e028-4acb-a08d-fbdcd207ea63.png",
+    "gender": "男性",
+    "genre_tags": [
+      "渋め系",
+      "低音"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 99,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 101,
+        "style_name": "シリアス"
+      }
+    ]
+  },
+  "0b466290-f9b6-4718-8d37-6c0c81e824ac": {
+    "display_name": "黒沢冴白",
+    "icon_file": "0b466290-f9b6-4718-8d37-6c0c81e824ac.png",
+    "gender": "男性",
+    "genre_tags": [
+      "クール"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 100,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "462cd6b4-c088-42b0-b357-3816e24f112e": {
+    "display_name": "ユーレイちゃん",
+    "icon_file": "462cd6b4-c088-42b0-b357-3816e24f112e.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 102,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 103,
+        "style_name": "甘々"
+      },
+      {
+        "style_id": 104,
+        "style_name": "哀しみ"
+      },
+      {
+        "style_id": 105,
+        "style_name": "ささやき"
+      },
+      {
+        "style_id": 106,
+        "style_name": "ツクモちゃん"
+      }
+    ]
+  },
+  "80802b2d-8c75-4429-978b-515105017010": {
+    "display_name": "東北ずん子",
+    "icon_file": "80802b2d-8c75-4429-978b-515105017010.png",
+    "gender": "女性",
+    "genre_tags": [
+      "癒し系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 107,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "1bd6b32b-d650-4072-bbe5-1d0ef4aaa28b": {
+    "display_name": "東北きりたん",
+    "icon_file": "1bd6b32b-d650-4072-bbe5-1d0ef4aaa28b.png",
+    "gender": "女性",
+    "genre_tags": [
+      "元気系",
+      "幼い系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 108,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "ab4c31a3-8769-422a-b412-708f5ae637e8": {
+    "display_name": "東北イタコ",
+    "icon_file": "ab4c31a3-8769-422a-b412-708f5ae637e8.png",
+    "gender": "女性",
+    "genre_tags": [
+      "お姉さん系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 109,
+        "style_name": "ノーマル"
+      }
+    ]
+  },
+  "3be49e15-34bb-48a0-9e2f-9b80c96e9905": {
+    "display_name": "あんこもん",
+    "icon_file": "3be49e15-34bb-48a0-9e2f-9b80c96e9905.png",
+    "gender": "女性",
+    "genre_tags": [
+      "上品系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 113,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 114,
+        "style_name": "つよつよ"
+      },
+      {
+        "style_id": 115,
+        "style_name": "よわよわ"
+      },
+      {
+        "style_id": 116,
+        "style_name": "けだるげ"
+      },
+      {
+        "style_id": 117,
+        "style_name": "ささやき"
+      }
+    ]
+  },
+  "d3be2066-205b-47f6-8818-1d93a9ca9cef": {
+    "display_name": "夜語トバリ",
+    "icon_file": "d3be2066-205b-47f6-8818-1d93a9ca9cef.png",
+    "gender": "女性",
+    "genre_tags": [
+      "お姉さん系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 118,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 119,
+        "style_name": "明るい"
+      },
+      {
+        "style_id": 120,
+        "style_name": "哀しみ"
+      },
+      {
+        "style_id": 121,
+        "style_name": "呆れ"
+      }
+    ]
+  },
+  "aca7de06-9ff9-49a3-9f08-9d3bc19689e5": {
+    "display_name": "暁記ミタマ",
+    "icon_file": "aca7de06-9ff9-49a3-9f08-9d3bc19689e5.png",
+    "gender": "女性",
+    "genre_tags": [
+      "クール",
+      "低音"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 122,
+        "style_name": "ノーマル"
+      },
+      {
+        "style_id": 123,
+        "style_name": "怒り"
+      },
+      {
+        "style_id": 124,
+        "style_name": "哀しみ"
+      },
+      {
+        "style_id": 125,
+        "style_name": "ささやき"
+      }
+    ]
+  },
+  "cc7baa71-6c74-4399-803b-b60576176a08": {
+    "display_name": "里石ユカ",
+    "icon_file": "cc7baa71-6c74-4399-803b-b60576176a08.png",
+    "gender": "女性",
+    "genre_tags": [
+      "お姉さん系"
+    ],
+    "is_favorite": false,
+    "styles": [
+      {
+        "style_id": 126,
+        "style_name": "つぼみ"
+      }
+    ]
+  }
+}
