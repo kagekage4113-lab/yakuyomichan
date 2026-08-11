@@ -1,0 +1,35 @@
+# ユーザーごとの個人設定・認証情報(絶対に公開しない)
+token_config.json
+app_settings.json
+selected_voice.json
+voice_params.json
+hotkey_config.json
+auto_launch_config.json
+overlay_design.json
+overlay_palette.json
+
+# 実行時に生成されるキャッシュ・ログ
+sample_cache/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstallerのビルド生成物
+build/
+dist/
+*.spec
+
+# Inno Setupのビルド生成物
+installer_source/Output/
+installer_source/app/
+
+# 第三者配布物(著作権のため同梱しない)
+installer_assets/VoicevoxSetup.exe
+installer_assets/LMStudioSetup.exe
+
+# OS由来の不要ファイル
+.DS_Store
+Thumbs.db
