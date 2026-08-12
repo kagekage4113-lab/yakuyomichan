@@ -6,6 +6,7 @@
 【保存先】
 logs/2026-08-07.txt のように、日付ごとに1ファイル。
 同じ日に何度もアプリを起動・終了しても、同じファイルに追記される。
+(exeがあるフォルダを基準にする。writable_path()経由)
 
 【使い方】
 from chat_logger import log_comment, get_log_dir
@@ -16,19 +17,36 @@ log_comment(platform="twitch", user="user_92",
 import datetime
 import os
 
+from resource_path import writable_path
+
 LOG_DIR = "logs"
+
+
+def _log_dir_path() -> str:
+    """
+    【重要】以前は相対パス("logs")のまま os.makedirs / パス組み立てを
+    行っていたため、PyInstallerでビルドしたexeを、書き込み権限が
+    制限された場所(Program Files配下等)にインストールした場合、
+    正しい場所にログフォルダを作成できない(あるいは作成に失敗して
+    ログ保存自体が機能しない)不具合があった。
+    writable_path() 経由で、常に「exeがあるフォルダ」を基準にする
+    ことで解消している。
+    """
+    return writable_path(LOG_DIR)
 
 
 def get_log_dir() -> str:
     """ログフォルダの絶対パスを返す(フォルダが無ければ作成する)"""
-    os.makedirs(LOG_DIR, exist_ok=True)
-    return os.path.abspath(LOG_DIR)
+    path = _log_dir_path()
+    os.makedirs(path, exist_ok=True)
+    return os.path.abspath(path)
 
 
 def _today_log_path() -> str:
-    os.makedirs(LOG_DIR, exist_ok=True)
+    log_dir = _log_dir_path()
+    os.makedirs(log_dir, exist_ok=True)
     today = datetime.date.today().isoformat()
-    return os.path.join(LOG_DIR, f"{today}.txt")
+    return os.path.join(log_dir, f"{today}.txt")
 
 
 def log_comment(platform: str, user: str, original: str, translated: str):

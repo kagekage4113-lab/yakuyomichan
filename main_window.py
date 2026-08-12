@@ -936,15 +936,21 @@ class MainWindow(tk.Tk):
     # ---------- 選択中ボイスの永続化 ----------
 
     def _save_selected_voice(self, style_id, full_label, icon_path):
+        # 【重要】以前は相対パス(SELECTED_VOICE_PATH)のまま open() していたため、
+        # PyInstallerでビルドしたexeを、書き込み権限が制限された場所
+        # (Program Files配下等)にインストールした場合、正しい場所を
+        # 読み書きできず、選択中ボイスが再起動後に引き継がれない
+        # 不具合があった。writable_path() 経由に修正している。
         data = {"style_id": style_id, "full_label": full_label, "icon_path": icon_path}
-        with open(SELECTED_VOICE_PATH, "w", encoding="utf-8") as f:
+        with open(writable_path(SELECTED_VOICE_PATH), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _load_selected_voice(self):
-        if not os.path.exists(SELECTED_VOICE_PATH):
+        path = writable_path(SELECTED_VOICE_PATH)
+        if not os.path.exists(path):
             return
         try:
-            with open(SELECTED_VOICE_PATH, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.selected_style_id = data.get("style_id")
             self.selected_label.set(data.get("full_label", "(未選択)"))

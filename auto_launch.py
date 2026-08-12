@@ -7,7 +7,7 @@ VOICEVOX / LM Studio を、このアプリの起動と同時に
 二重起動せず、未起動の場合だけ実行ファイルを起動する。
 
 【設定の保存先】
-auto_launch_config.json
+auto_launch_config.json (exeがあるフォルダ。writable_path()経由)
 {
   "voicevox": {"enabled": true, "exe_path": "C:\\...\\VOICEVOX.exe"},
   "lm_studio": {"enabled": true, "exe_path": "C:\\...\\LM Studio.exe"}
@@ -25,6 +25,8 @@ import time
 
 import requests
 
+from resource_path import writable_path
+
 CONFIG_PATH = "auto_launch_config.json"
 
 VOICEVOX_CHECK_URL = "http://127.0.0.1:50021/version"
@@ -32,14 +34,27 @@ LM_STUDIO_CHECK_URL = "http://127.0.0.1:1234/v1/models"
 
 
 def load_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
+    """
+    【重要】以前は相対パス("auto_launch_config.json")のまま
+    open() していたため、PyInstallerでビルドしたexeを、
+    書き込み権限が制限された場所(Program Files配下等)に
+    インストールした場合、正しい場所を読み書きできなかった。
+
+    これは特に実害が大きく、インストーラーが ssPostInstall で
+    せっかくVOICEVOX/LM Studioのパスを自動書き込みしても、
+    アプリ側がそれを見つけられず、「自動起動設定が反映されない」
+    という不具合につながっていた。writable_path() 経由に修正し、
+    インストーラー側の書き込み先と一致させている。
+    """
+    path = writable_path(CONFIG_PATH)
+    if not os.path.exists(path):
         return {
             "voicevox": {"enabled": False, "exe_path": ""},
             "lm_studio": {"enabled": False, "exe_path": ""},
             "unload_llm_on_exit": False,
         }
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             config = json.load(f)
         config.setdefault("unload_llm_on_exit", False)
         return config
@@ -52,7 +67,7 @@ def load_config() -> dict:
 
 
 def save_config(config: dict):
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+    with open(writable_path(CONFIG_PATH), "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 

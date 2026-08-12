@@ -20,6 +20,8 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
+from resource_path import writable_path
+
 VOICE_PARAMS_PATH = "voice_params.json"
 HOTKEY_CONFIG_PATH = "hotkey_config.json"
 
@@ -35,27 +37,37 @@ DEFAULT_HOTKEY = "Ctrl+Shift+M"  # ミュート切り替えの初期割り当て
 
 
 def load_hotkey_config():
-    if not os.path.exists(HOTKEY_CONFIG_PATH):
+    """
+    【重要】以前は相対パス("hotkey_config.json")のまま open() していたため、
+    PyInstallerでビルドしたexeを、書き込み権限が制限された場所
+    (Program Files配下等)にインストールした場合、正しい場所を
+    読み書きできず、設定が保存されない不具合があった。
+    writable_path() を使い、常に「exeがあるフォルダ」を基準にする
+    ことで解消している(以下、voice_paramsも同様)。
+    """
+    path = writable_path(HOTKEY_CONFIG_PATH)
+    if not os.path.exists(path):
         return {"mute_toggle": DEFAULT_HOTKEY}
     try:
-        with open(HOTKEY_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {"mute_toggle": DEFAULT_HOTKEY}
 
 
 def save_hotkey_config(config: dict):
-    with open(HOTKEY_CONFIG_PATH, "w", encoding="utf-8") as f:
+    with open(writable_path(HOTKEY_CONFIG_PATH), "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
 def load_voice_params():
     """保存済みの調整値を読み込む。無ければデフォルト値を返す。"""
     defaults = {key: PARAM_DEFS[key][3] for key in PARAM_DEFS}
-    if not os.path.exists(VOICE_PARAMS_PATH):
+    path = writable_path(VOICE_PARAMS_PATH)
+    if not os.path.exists(path):
         return defaults
     try:
-        with open(VOICE_PARAMS_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             saved = json.load(f)
         defaults.update(saved)
     except Exception:
@@ -64,7 +76,7 @@ def load_voice_params():
 
 
 def save_voice_params(params: dict):
-    with open(VOICE_PARAMS_PATH, "w", encoding="utf-8") as f:
+    with open(writable_path(VOICE_PARAMS_PATH), "w", encoding="utf-8") as f:
         json.dump(params, f, ensure_ascii=False, indent=2)
 
 

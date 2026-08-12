@@ -22,6 +22,8 @@ import threading
 
 import requests
 
+from resource_path import writable_path
+
 VOICEVOX_URL = "http://127.0.0.1:50021"
 
 
@@ -86,12 +88,20 @@ def _load_saved_params():
     """
     voice_settings_window.py が保存した voice_params.json があれば読み込む。
     無ければNone(=VOICEVOXの既定値のまま)を返す。
+
+    【重要】以前は相対パス("voice_params.json")のまま open() していたため、
+    PyInstallerでビルドしたexeを、書き込み権限が制限された場所
+    (Program Files配下等)にインストールした場合、voice_settings_window.py
+    側が書き込んだ設定(exeの隣、writable_path基準)を、こちらが
+    見つけられない、というズレが生じていた。writable_path() 経由に
+    修正し、保存側と読み込み側の基準を一致させている。
     """
-    if not os.path.exists("voice_params.json"):
+    path = writable_path("voice_params.json")
+    if not os.path.exists(path):
         return None
     try:
         import json
-        with open("voice_params.json", "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return None
@@ -148,8 +158,9 @@ if __name__ == "__main__":
     style_id = 3
     label = "ずんだもん(ノーマル)"
 
-    if os.path.exists("selected_voice.json"):
-        with open("selected_voice.json", "r", encoding="utf-8") as f:
+    selected_voice_path = writable_path("selected_voice.json")
+    if os.path.exists(selected_voice_path):
+        with open(selected_voice_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         style_id = data.get("style_id", style_id)
         label = data.get("full_label", label)

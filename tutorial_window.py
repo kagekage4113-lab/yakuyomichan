@@ -133,9 +133,19 @@ class TutorialWindow(tk.Toplevel):
         self._clear_highlight()
 
         if self.dont_show_var.get():
-            settings = load_app_settings()
-            settings["tutorial_shown"] = True
-            save_app_settings(settings)
+            # 【重要】以前は、この保存処理が失敗した場合(書き込み権限の
+            # 問題等)、例外がそのまま外に伝播し、_close()自体が
+            # 完了しないまま止まってしまい、結果として
+            # self.destroy() に到達せず、ウィンドウが閉じない、
+            # という不具合につながっていた。保存に失敗しても
+            # ウィンドウは必ず閉じられるよう、try/exceptで
+            # 保存処理だけを独立させている。
+            try:
+                settings = load_app_settings()
+                settings["tutorial_shown"] = True
+                save_app_settings(settings)
+            except Exception as e:
+                print(f"[tutorial_window] 設定の保存に失敗しました(次回もチュートリアルが表示されます): {e}")
 
         self.destroy()
 

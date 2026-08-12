@@ -20,6 +20,8 @@ from tkinter import ttk, messagebox
 
 import requests
 
+from resource_path import writable_path
+
 TOKEN_CONFIG_PATH = "token_config.json"
 
 
@@ -45,10 +47,20 @@ class TokenSettingsWindow(tk.Toplevel):
     # ---------- 既存設定の読み込み ----------
 
     def _load_existing(self):
-        if not os.path.exists(TOKEN_CONFIG_PATH):
+        """
+        【重要】以前は相対パス("token_config.json")のまま
+        open()していたため、PyInstallerでビルドした exe を、
+        書き込み権限が制限された場所(Program Files配下等)に
+        インストールした場合、カレントディレクトリが予測できず、
+        正しい場所を読み書きできていなかった。
+        writable_path() を使い、常に「exeがあるフォルダ」を
+        基準にすることで、この問題を解消している。
+        """
+        path = writable_path(TOKEN_CONFIG_PATH)
+        if not os.path.exists(path):
             return
         try:
-            with open(TOKEN_CONFIG_PATH, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except Exception:
             return
@@ -236,8 +248,22 @@ class TokenSettingsWindow(tk.Toplevel):
                 "video_id": self.vars["youtube_video_id"].get().strip(),
             },
         }
-        with open(TOKEN_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        try:
+            with open(writable_path(TOKEN_CONFIG_PATH), "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            # 【重要】以前は保存の失敗が握りつぶされ、「保存しました」の
+            # ポップアップすら出ないまま、無反応に見えていた。
+            # 書き込み権限が無い等の理由で失敗した場合は、
+            # 必ずユーザーにエラーとして伝える。
+            messagebox.showerror(
+                "保存に失敗しました",
+                f"設定を保存できませんでした。\n\n{e}\n\n"
+                "インストール先のフォルダに書き込み権限があるか確認してください。",
+                parent=self,
+            )
+            return
 
         messagebox.showinfo("保存しました", "トークン設定を保存しました。", parent=self)
 
