@@ -151,7 +151,20 @@ class MainWindow(tk.Tk):
         self.selected_label = tk.StringVar(value="(未選択)")
         self.selected_icon_photo = None  # 参照保持用(GC対策)
         self.volume_var = tk.DoubleVar(value=70)
-        self.platform_var = tk.StringVar(value="Twitch")
+
+        # プラットフォーム選択(Twitch / YouTube / Twitch + YouTube)は、
+        # 前回起動時に選んでいたものを app_settings.json から復元する。
+        # 【重要】以前は毎回 "Twitch" 固定で起動していたため、
+        # 前回YouTubeを選んでいた場合でも、再起動のたびに
+        # 手動で選び直す必要があり地味に不便だった。
+        # 万一、保存されている値が選択肢に無い(設定ファイルの手動編集や
+        # 過去バージョンとの互換性の都合等)場合は "Twitch" にフォールバックする。
+        PLATFORM_CHOICES = ("Twitch", "YouTube", "Twitch + YouTube")
+        saved_platform = load_app_settings().get("selected_platform", "Twitch")
+        if saved_platform not in PLATFORM_CHOICES:
+            saved_platform = "Twitch"
+        self.platform_var = tk.StringVar(value=saved_platform)
+
         self.is_running = False
 
         self._build_menu()
@@ -548,7 +561,14 @@ class MainWindow(tk.Tk):
         まだ起動していないものだけを追加で起動する。
         起動前の状態であれば、ここでは何もしない
         (「起動」ボタンを押した時にまとめて起動される)。
+
+        選んだプラットフォームは、次回起動時にも復元できるよう
+        app_settings.json に都度保存しておく。
         """
+        settings = load_app_settings()
+        settings["selected_platform"] = self.platform_var.get()
+        save_app_settings(settings)
+
         if self.is_running:
             self._start_watching()
 
@@ -753,10 +773,16 @@ class MainWindow(tk.Tk):
 
     def _build_chat_area(self):
         columns = ("user", "original", "translated")
+
+        # スクロールバーを付けるため、Treeviewとスクロールバーを
+        # 同じコンテナフレームの中に並べて配置する。
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+
         # show="tree headings" にすることで、列#0(アイコン専用)を使えるようにする。
         # 通常のTreeviewの列(values側)には画像を置けないため、
         # プラットフォームアイコンだけは特別に列#0に表示する。
-        self.chat_tree = ttk.Treeview(self, columns=columns, show="tree headings", height=12)
+        self.chat_tree = ttk.Treeview(container, columns=columns, show="tree headings", height=12)
 
         # デフォルトの行の高さ(多くのテーマで20px前後)だと、
         # 18pxのアイコンが収まりきらず切れてしまうことがあるため、
@@ -789,7 +815,14 @@ class MainWindow(tk.Tk):
         self.chat_tree.column("original", width=300)
         self.chat_tree.column("translated", width=300)
 
-        self.chat_tree.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+        self.chat_tree.pack(side="left", fill="both", expand=True)
+
+        # 縦スクロールバー。チャット欄が溜まってきた時に、
+        # マウスホイールだけでなく、バーをドラッグしても過去のログを
+        # 見返せるようにする。
+        chat_scrollbar = ttk.Scrollbar(container, orient="vertical", command=self.chat_tree.yview)
+        chat_scrollbar.pack(side="right", fill="y")
+        self.chat_tree.configure(yscrollcommand=chat_scrollbar.set)
 
         self._platform_icons = self._load_platform_icons()
 
@@ -834,22 +867,49 @@ class MainWindow(tk.Tk):
         表示のパフォーマンスが落ちる・メモリを圧迫するため、
         設定された保管数(デフォルト100件)を超えたら、
         古い行から順に削除する。
+
+        【自動スクロールについて】
+        チャットが勢いよく流れている時、常に最新のコメントが
+        画面下に見えている状態にしたい。一方で、ユーザーが過去ログを
+        読み返そうとスクロールバーを上に動かしている最中に、
+        新着コメントのたびに強制的に一番下へ引き戻されると、
+        読んでいる内容が流れてしまって読みづらい。
+        そのため、行を追加する直前の時点で「既に一番下まで
+        表示していたか」を確認し、そうだった場合だけ、追加後も
+        引き続き一番下(＝最新)が見えるように自動でスクロールする。
+        過去ログを見返している最中(一番下ではない状態)であれば、
+        表示位置はそのまま動かさない。
         """
+        was_at_bottom = self._is_chat_scrolled_to_bottom()
         display_user = f"  {user}"
 
         icon = self._platform_icons.get(platform)
         if icon is not None:
-            self.chat_tree.insert(
+            new_item = self.chat_tree.insert(
                 "", "end", image=icon, values=(display_user, original or "—", translated),
             )
         else:
             # アイコン画像が無い場合のフォールバック
             fallback_mark = "🟣" if platform == "twitch" else "🔴"
-            self.chat_tree.insert(
+            new_item = self.chat_tree.insert(
                 "", "end", text=fallback_mark, values=(display_user, original or "—", translated),
             )
 
         self._trim_chat_log()
+
+        if was_at_bottom:
+            self.chat_tree.see(new_item)
+
+    def _is_chat_scrolled_to_bottom(self):
+        """
+        チャット欄が、現在ちょうど一番下(最新行)まで表示されているかを判定する。
+        Treeview.yview()は(表示中の先頭割合, 表示中の末尾割合)の
+        タプルを返すので、末尾割合がほぼ1.0(=末尾まで見えている)かどうかで判定する。
+        まだ1行も無い場合(yviewが(0.0, 1.0)を返す)も「一番下」扱いにして、
+        最初の行から自動追従が効くようにする。
+        """
+        _, bottom_fraction = self.chat_tree.yview()
+        return bottom_fraction >= 0.999
 
     def _trim_chat_log(self):
         """保管上限を超えた古いチャット行を削除する"""

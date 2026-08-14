@@ -55,6 +55,8 @@ DEFAULT_DESIGN = {
     "user_color": "#7fd4ff",
     "original_color": "#aaaaaa",
     "corner_radius": 8,
+    "max_lines": 8,     # オーバーレイに同時表示するコメントの最大行数
+                        # (これを超えた古い行から自動的に消えていく)
 }
 
 # 各色項目につき24色のプリセットパレット。
@@ -435,6 +437,7 @@ class OverlayDesignWindow(tk.Toplevel):
         plain_items = [
             ("bg_opacity", "背景の透明度", 0, 100),
             ("corner_radius", "角の丸み", 0, 24),
+            ("max_lines", "表示行数", 1, 30),
         ]
         for key, label, vmin, vmax in plain_items:
             ttk.Label(frame, text=label, width=11, anchor="w").grid(
@@ -463,7 +466,7 @@ class OverlayDesignWindow(tk.Toplevel):
         )
 
     def _reset_sizes(self):
-        for key in ("font_size", "user_font_size", "bg_opacity", "corner_radius"):
+        for key in ("font_size", "user_font_size", "bg_opacity", "corner_radius", "max_lines"):
             self.design[key] = DEFAULT_DESIGN[key]
             self.scale_vars[key].set(self.design[key])
             self.entry_vars[key].set(str(self.design[key]))
@@ -635,12 +638,20 @@ class OverlayDesignWindow(tk.Toplevel):
         frame = ttk.Frame(self, padding=(14, 10))
         frame.pack(fill="x", side="bottom")
 
-        ttk.Label(
-            frame,
-            text="操作すると自動的に保存され、実際のオーバーレイにも反映されます。\n"
-                 "OBSに反映するにはソースを右クリック→「更新」してください。",
-            foreground="gray", font=("", 8), justify="left",
-        ).pack(side="left")
+        ttk.Button(frame, text="保存して閉じる", command=self._save_and_close).pack(side="right")
+
+    def _save_and_close(self):
+        """
+        【重要】この画面自体は、つまみを操作するたびに自動保存される
+        設計になっているため、本来この処理を経なくても設定は
+        既に保存済みのはず。それでも明示的な「保存して閉じる」ボタンを
+        用意しているのは、閉じる操作のついでに、念のため現在の
+        入力欄・スライダーの状態を design に反映してから保存し直す
+        ことで、「閉じたつもりが、直前の操作が反映されていなかった」
+        というすれ違いが起きないようにするため。
+        """
+        self._on_change()
+        self.destroy()
 
 
 if __name__ == "__main__":
