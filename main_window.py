@@ -57,8 +57,8 @@ import auto_launch
 ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
-APP_NAME = "多言語チャット翻訳読み上げボット"
-APP_VERSION = "1.0.0"
+APP_NAME = "やく読みちゃん"
+APP_VERSION = "1.1.0"
 README_PATH = "README_ja.txt"
 
 
@@ -126,7 +126,7 @@ class ConsolePanel(ttk.Frame):
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("多言語チャット翻訳読み上げボット")
+        self.title(APP_NAME)
         self.geometry("900x600")
         self.minsize(700, 480)
 
@@ -383,7 +383,7 @@ class MainWindow(tk.Tk):
             self.console.log(f"READMEを開けませんでした: {e}", level="error")
 
     def _open_token_settings(self):
-        TokenSettingsWindow(self)
+        self._open_or_focus("_token_settings_win", lambda: TokenSettingsWindow(self))
 
     def _on_translation_toggle(self):
         settings = load_app_settings()
@@ -424,7 +424,7 @@ class MainWindow(tk.Tk):
         self.console.log(f"オーバーレイURLをコピーしました: {url}")
 
     def _open_overlay_design(self):
-        OverlayDesignWindow(self)
+        self._open_or_focus("_overlay_design_win", lambda: OverlayDesignWindow(self))
 
     # ---------- 上部: プラットフォーム/起動 ----------
 
@@ -900,16 +900,49 @@ class MainWindow(tk.Tk):
         self.volume_icon_var.set("🔇" if self.is_muted else "🔊")
         self.console.log("ミュートにしました。" if self.is_muted else "ミュートを解除しました。")
 
+    # ---------- サブウィンドウの多重起動防止 ----------
+
+    def _open_or_focus(self, attr_name, factory):
+        """
+        サブウィンドウ(ボイス選択・詳細設定・オーバーレイのデザイン設定・
+        トークン設定)を開く際の共通処理。
+
+        既に同じウィンドウが開いている場合は、新しく作らず、
+        既存のウィンドウを最前面に持ってくる(lift() + focus_force())。
+        開いていない、または既に閉じられている場合(winfo_exists()が
+        Falseになる)は、factory()で新しく作成し、self.{attr_name} に
+        インスタンスを保持しておく。
+
+        attr_name: インスタンスを保持しておく属性名(例: "_voice_select_win")
+        factory: 新規ウィンドウを作成して返す関数(引数なしのcallable)
+        """
+        win = getattr(self, attr_name, None)
+        if win is not None and win.winfo_exists():
+            win.lift()
+            win.focus_force()
+            return win
+
+        win = factory()
+        setattr(self, attr_name, win)
+        return win
+
     def _open_voice_select(self):
-        VoiceSelectWindow(self, on_select=self._on_voice_selected)
+        self._open_or_focus(
+            "_voice_select_win",
+            lambda: VoiceSelectWindow(self, on_select=self._on_voice_selected),
+        )
 
     def _open_voice_settings(self):
-        win = VoiceSettingsWindow(
-            self, style_id=self.selected_style_id, display_name=self.selected_label.get(),
-        )
-        # 設定画面が閉じられたタイミングで、変更されたかもしれない
-        # ホットキー設定を読み直して反映する
-        win.bind("<Destroy>", lambda e: self._register_hotkeys() if e.widget == win else None)
+        def create():
+            win = VoiceSettingsWindow(
+                self, style_id=self.selected_style_id, display_name=self.selected_label.get(),
+            )
+            # 設定画面が閉じられたタイミングで、変更されたかもしれない
+            # ホットキー設定を読み直して反映する
+            win.bind("<Destroy>", lambda e: self._register_hotkeys() if e.widget == win else None)
+            return win
+
+        self._open_or_focus("_voice_settings_win", create)
 
     def _on_voice_selected(self, style_id, full_label, icon_path):
         self.selected_style_id = style_id
