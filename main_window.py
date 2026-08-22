@@ -38,12 +38,12 @@ except ImportError:
     SV_TTK_AVAILABLE = False
 
 from voice_select_window import VoiceSelectWindow
-from voice_settings_window import VoiceSettingsWindow, load_hotkey_config
+from voice_settings_window import VoiceSettingsWindow, load_hotkey_config, load_voice_params
 from token_settings_window import TokenSettingsWindow
 from overlay_design_window import OverlayDesignWindow
 from lang_detect import needs_translation
 from translator import translate_to_japanese, load_model, unload_model
-from voicevox_speak import speak
+from voicevox_speak import speak_with_params
 import twitch_watcher
 import youtube_watcher
 import overlay_server
@@ -58,8 +58,27 @@ ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
 APP_NAME = "やく読みちゃん"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.2"
 README_PATH = "README_ja.txt"
+
+# アップデート確認先のGitHubリポジトリ("ユーザー名/リポジトリ名")
+GITHUB_REPO = "kagekage4113-lab/multilingual-chat-tts-bot"
+
+
+def _parse_version(tag: str):
+    """
+    "v1.1.0" や "1.1.0" のようなタグ文字列を (1, 1, 0) のような
+    整数タプルに変換する。比較(新しいかどうかの判定)をしやすくするため。
+    想定外の形式(数字以外が混ざっている等)の場合は None を返す。
+    """
+    if not tag:
+        return None
+    cleaned = tag.lstrip("vV").strip()
+    parts = cleaned.split(".")
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
+        return None
 
 
 class ConsolePanel(ttk.Frame):
@@ -150,7 +169,12 @@ class MainWindow(tk.Tk):
         self.selected_style_id = None
         self.selected_label = tk.StringVar(value="(未選択)")
         self.selected_icon_photo = None  # 参照保持用(GC対策)
-        self.volume_var = tk.DoubleVar(value=70)
+
+        # 音量ゲージも、前回起動時の値を app_settings.json から復元する。
+        # 【重要】以前は毎回 70 固定で起動していたため、
+        # 前回100に上げていても、再起動のたびに毎回上げ直す必要があった。
+        saved_volume = load_app_settings().get("volume", 70)
+        self.volume_var = tk.DoubleVar(value=saved_volume)
 
         # プラットフォーム選択(Twitch / YouTube / Twitch + YouTube)は、
         # 前回起動時に選んでいたものを app_settings.json から復元する。
@@ -328,6 +352,8 @@ class MainWindow(tk.Tk):
         help_menu = tk.Menu(menubar, tearoff=0)
         help_menu.add_command(label="バージョン情報", command=self._show_about)
         help_menu.add_command(label="使い方(README)を開く", command=self._open_readme)
+        help_menu.add_separator()
+        help_menu.add_command(label="アップデートを確認", command=self._check_for_updates)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
 
         self.config(menu=menubar)
@@ -369,6 +395,89 @@ class MainWindow(tk.Tk):
             "詳しい使い方はヘルプメニューのREADMEをご覧ください。",
             parent=self,
         )
+
+    def _check_for_updates(self):
+        """
+        GitHub Releasesの最新版と、現在のバージョンを比較する。
+
+        【インストーラーの上書きアップデートについて】
+        installer.iss は DefaultDirName を {userappdata} にしており、
+        AppId も毎回変えずに固定しているため、新しいインストーラーを
+        そのまま実行するだけで、アンインストール等を挟まずに
+        上書きで更新できるようになっている(トークン設定等の
+        JSON設定ファイルも、インストール先フォルダに残ったまま引き継がれる)。
+        そのため、この画面では「新しいバージョンがあるかどうかの確認」と
+        「配布ページを開く」までを行い、実際のインストール(exeの実行)は
+        ユーザー自身の操作に委ねる、という設計にしている。
+        """
+        self.console.log("アップデートを確認しています...")
+
+        def task():
+            try:
+                resp = requests.get(
+                    f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                latest_tag = data.get("tag_name", "")
+                release_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases/latest")
+            except Exception as e:
+                self._safe_after(lambda: self._show_update_check_error(e))
+                return
+
+            self._safe_after(lambda: self._show_update_check_result(latest_tag, release_url))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _show_update_check_error(self, error):
+        from tkinter import messagebox
+        self.console.log(f"アップデートの確認に失敗しました: {error}", level="error")
+        messagebox.showerror(
+            "アップデートの確認に失敗しました",
+            f"最新バージョンの情報を取得できませんでした。\n\nインターネット接続を確認してください。\n\n{error}",
+            parent=self,
+        )
+
+    def _show_update_check_result(self, latest_tag, release_url):
+        from tkinter import messagebox
+        import webbrowser
+
+        latest_version = _parse_version(latest_tag)
+        current_version = _parse_version(APP_VERSION)
+
+        if latest_version is None:
+            # タグの形式が想定外(例: "v1.1.0"以外の命名)だった場合は、
+            # 新旧判定はできないが、リリースページ自体は案内できるようにしておく
+            self.console.log(f"バージョン情報の形式を解釈できませんでした: {latest_tag}", level="normal")
+            should_open = messagebox.askyesno(
+                "アップデートを確認",
+                f"最新リリース({latest_tag or '不明'})の情報をうまく解釈できませんでした。\n"
+                "リリースページを開いて、手動で確認しますか?",
+                parent=self,
+            )
+        elif latest_version > current_version:
+            self.console.log(f"新しいバージョンがあります: {latest_tag}")
+            should_open = messagebox.askyesno(
+                "アップデートがあります",
+                f"新しいバージョン {latest_tag} が公開されています。\n"
+                f"(現在のバージョン: {APP_VERSION})\n\n"
+                "配布ページを開いて、新しいインストーラーをダウンロードしますか?\n"
+                "既存のアプリをアンインストールする必要はなく、\n"
+                "新しいインストーラーをそのまま実行するだけで上書き更新できます。",
+                parent=self,
+            )
+        else:
+            self.console.log("お使いのバージョンは最新です。")
+            messagebox.showinfo(
+                "アップデートを確認",
+                f"お使いのバージョン({APP_VERSION})は最新です。",
+                parent=self,
+            )
+            return
+
+        if should_open:
+            webbrowser.open(release_url)
 
     def _open_readme(self):
         """
@@ -745,9 +854,22 @@ class MainWindow(tk.Tk):
             # メイン画面の音量ゲージ(0〜100)とミュート状態を、
             # 0.0〜1.0の掛け算係数に変換して読み上げに反映する
             volume_multiplier = 0.0 if self.is_muted else (self.volume_var.get() / 100.0)
-            speak(
-                translated, style_id=self.selected_style_id, blocking=False,
-                volume_multiplier=volume_multiplier,
+
+            # 【重要】以前は speak() をそのまま呼んでいたため、
+            # 「詳細設定」画面(voice_settings_window.py)で調整した
+            # 話速・音高・抑揚・音量スケールが、テスト再生時にしか
+            # 反映されず、実際のチャット読み上げでは常にデフォルト値の
+            # ままになっていた(=保存はされているのに、次回起動時も
+            # 常にデフォルトで読まれるように見えていた原因)。
+            # voice_params.json から最新の詳細設定を読み込み、
+            # メイン画面の音量ゲージ・ミュート状態(volume_multiplier)を
+            # そのうえから掛け合わせてから speak_with_params() に渡す
+            # ことで、両方の設定が同時に効くようにする。
+            voice_params = dict(load_voice_params())
+            voice_params["volumeScale"] = voice_params.get("volumeScale", 1.0) * volume_multiplier
+
+            speak_with_params(
+                translated, style_id=self.selected_style_id, params=voice_params, blocking=False,
             )
             overlay_server.push_comment(platform, username, original_for_display, translated)
             chat_logger.log_comment(platform, username, original_for_display, translated)
@@ -937,6 +1059,7 @@ class MainWindow(tk.Tk):
         volume_scale = ttk.Scale(
             frame, from_=0, to=100, orient="horizontal",
             variable=self.volume_var, length=120,
+            command=lambda v: self._save_volume(),
         )
         volume_scale.pack(side="left", padx=(4, 16))
 
@@ -959,6 +1082,17 @@ class MainWindow(tk.Tk):
         self.is_muted = not self.is_muted
         self.volume_icon_var.set("🔇" if self.is_muted else "🔊")
         self.console.log("ミュートにしました。" if self.is_muted else "ミュートを解除しました。")
+
+    def _save_volume(self):
+        """
+        音量ゲージを動かすたびに呼ばれ、次回起動時にも同じ音量で
+        始められるよう app_settings.json に保存する。
+        (ミュート状態は一時的なショートカットのため、あえて保存対象には
+        含めていない。次回起動時は常にミュート解除の状態から始まる。)
+        """
+        settings = load_app_settings()
+        settings["volume"] = self.volume_var.get()
+        save_app_settings(settings)
 
     # ---------- サブウィンドウの多重起動防止 ----------
 
