@@ -58,7 +58,7 @@ ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
 APP_NAME = "やく読みちゃん"
-APP_VERSION = "1.1.2"
+APP_VERSION = "1.2.0"
 README_PATH = "README_ja.txt"
 
 # アップデート確認先のGitHubリポジトリ("ユーザー名/リポジトリ名")
@@ -353,6 +353,10 @@ class MainWindow(tk.Tk):
         help_menu.add_command(label="バージョン情報", command=self._show_about)
         help_menu.add_command(label="使い方(README)を開く", command=self._open_readme)
         help_menu.add_separator()
+        help_menu.add_command(label="翻訳ソフト(LM Studio)の導入について", command=self._show_lmstudio_guide)
+        help_menu.add_command(label="配信トークンの取得について", command=self._show_token_guide)
+        help_menu.add_command(label="VOICEVOXの導入について", command=self._show_voicevox_guide)
+        help_menu.add_separator()
         help_menu.add_command(label="アップデートを確認", command=self._check_for_updates)
         menubar.add_cascade(label="ヘルプ", menu=help_menu)
 
@@ -365,6 +369,22 @@ class MainWindow(tk.Tk):
         chat_logger.open_log_folder()
         self.console.log(f"ログフォルダを開きました: {chat_logger.get_log_dir()}")
 
+    def _open_folder(self, path, description=""):
+        """
+        指定したフォルダをOSの標準的な方法で開く共通処理。
+        _open_settings_folder / 各種ガイドの「フォルダを開く」ボタンから使う。
+        """
+        try:
+            if os.name == "nt":
+                os.startfile(path)
+            elif os.uname().sysname == "Darwin":
+                os.system(f'open "{path}"')
+            else:
+                os.system(f'xdg-open "{path}"')
+            self.console.log(f"{description}を開きました: {path}")
+        except Exception as e:
+            self.console.log(f"{description}を開けませんでした: {e}", level="error")
+
     def _open_settings_folder(self):
         """
         設定ファイル(token_config.json 等)が置かれているフォルダを開く。
@@ -373,17 +393,7 @@ class MainWindow(tk.Tk):
         あえて用意していない。トークンを含むため、誤って共有してしまう
         リスクを避けるため)。
         """
-        path = os.path.abspath(".")
-        try:
-            if os.name == "nt":
-                os.startfile(path)
-            elif os.uname().sysname == "Darwin":
-                os.system(f'open "{path}"')
-            else:
-                os.system(f'xdg-open "{path}"')
-            self.console.log(f"設定フォルダを開きました: {path}")
-        except Exception as e:
-            self.console.log(f"設定フォルダを開けませんでした: {e}", level="error")
+        self._open_folder(os.path.abspath("."), "設定フォルダ")
 
     def _show_about(self):
         from tkinter import messagebox
@@ -506,6 +516,128 @@ class MainWindow(tk.Tk):
 
     def _open_token_settings(self):
         self._open_or_focus("_token_settings_win", lambda: TokenSettingsWindow(self))
+
+    # ---------- ヘルプメニュー: 個別導入ガイド ----------
+    #
+    # 【背景】「翻訳ソフト(LM Studio)の導入」「配信トークンの取得」
+    # 「VOICEVOXの導入」は、いずれも本アプリの外側(別アプリ・外部サイト)
+    # で作業してもらう必要がある部分で、フィードバックとして
+    # 「説明が導入者任せになっている」との指摘があった。
+    # 特にLM Studioは、バージョンによって該当タブの名称が
+    # 「Local Server」だったり「Developer」だったりと表記が揺れており、
+    # README を一度読んだきりでは迷いやすい。
+    # そこで、ヘルプメニューからいつでも呼び出せる短いガイドを用意し、
+    # 該当の公式サイトや同梱インストーラーのフォルダに、ワンクリックで
+    # たどり着けるようにしている(README全体を読み直す必要をなくす)。
+
+    def _show_guide_dialog(self, title, intro, steps, links=None,
+                            folder_path=None, folder_label="同梱インストーラーのフォルダを開く"):
+        """
+        ヘルプメニューの各種ガイドで共通して使う、簡易ガイド用ウィンドウを組み立てる。
+
+        title: ウィンドウタイトル
+        intro: 冒頭の説明文(1〜2行程度)
+        steps: 手順の文字列リスト(番号付きで表示する)
+        links: [(ボタンのラベル, URL), ...] のリスト。案内したいサイトが
+               複数ある場合(Twitch用・YouTube用、等)にも対応できるよう、
+               単一URLではなくリスト形式にしている。Noneや空リストなら
+               リンクボタンは出さない。
+        folder_path: 案内したいフォルダのパス(Noneならボタンを出さない)
+        """
+        import webbrowser
+
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.geometry("480x380")
+        win.resizable(False, False)
+
+        ttk.Label(win, text=title, font=("", 12, "bold")).pack(anchor="w", padx=16, pady=(14, 4))
+
+        if intro:
+            ttk.Label(win, text=intro, wraplength=440, justify="left").pack(
+                anchor="w", padx=16, pady=(0, 10),
+            )
+
+        steps_frame = ttk.Frame(win, padding=(16, 0))
+        steps_frame.pack(fill="both", expand=True)
+        for i, step_text in enumerate(steps, start=1):
+            ttk.Label(
+                steps_frame, text=f"{i}. {step_text}", wraplength=420, justify="left",
+            ).pack(anchor="w", pady=4)
+
+        footer = ttk.Frame(win, padding=(16, 10))
+        footer.pack(fill="x", side="bottom")
+
+        left_buttons = ttk.Frame(footer)
+        left_buttons.pack(side="left")
+
+        if folder_path is not None:
+            ttk.Button(
+                left_buttons, text=folder_label,
+                command=lambda: self._open_folder(folder_path, folder_label),
+            ).pack(side="left")
+
+        for label, url in (links or []):
+            ttk.Button(left_buttons, text=label, command=lambda u=url: webbrowser.open(u)).pack(
+                side="left", padx=(8, 0),
+            )
+
+        ttk.Button(footer, text="閉じる", command=win.destroy).pack(side="right")
+
+    def _show_lmstudio_guide(self):
+        self._show_guide_dialog(
+            title="翻訳ソフト(LM Studio)の導入について",
+            intro=(
+                "翻訳には、無料のローカルLLMアプリ「LM Studio」を使います。\n"
+                "バージョンによって、手順3のタブ名が「Local Server」だったり\n"
+                "「Developer」だったりします。見当たらない場合は両方探してみてください。"
+            ),
+            steps=[
+                "公式サイトからLM Studioをダウンロード・インストールする",
+                "LM Studioを起動し、翻訳用モデル(Gemma4)を読み込む\n"
+                "  (同梱の download_model.bat で自動ダウンロードできます)",
+                "画面左側の「Local Server」または「Developer」タブを開く",
+                "上部のドロップダウンで、読み込んだモデルを選ぶ",
+                "「Start Server」ボタンを押し、サーバーが起動した状態にする\n"
+                "  (この状態のまま、LM Studioは閉じずに起動したままにしておいてください)",
+            ],
+            links=[("公式サイトを開く", "https://lmstudio.ai")],
+            folder_path=resource_path("optional_installers"),
+        )
+
+    def _show_token_guide(self):
+        self._show_guide_dialog(
+            title="配信トークンの取得について",
+            intro=(
+                "Twitch・YouTubeのチャットを読み取るには、それぞれ専用の\n"
+                "トークン・APIキーが必要です。取得したら「トークン設定」画面に貼り付けてください。"
+            ),
+            steps=[
+                "【Twitch】下の「Twitchトークン取得ページ」から外部サイトを開く",
+                "【Twitch】Twitchアカウントでログインし、発行された \"oauth:〜\" で始まる\n"
+                "  トークンをコピーする",
+                "【YouTube】下の「YouTube APIキー取得ガイド」から、Google公式の\n"
+                "  案内ページを開き、手順に沿ってAPIキーを発行する",
+                "発行できたら、メニューの「トークン設定」画面にそれぞれ貼り付けて保存する",
+            ],
+            links=[
+                ("Twitchトークン取得ページ", "https://twitchtokengenerator.com/"),
+                ("YouTube APIキー取得ガイド", "https://developers.google.com/youtube/v3/getting-started"),
+            ],
+        )
+
+    def _show_voicevox_guide(self):
+        self._show_guide_dialog(
+            title="VOICEVOXの導入について",
+            intro="読み上げには、無料の音声合成ソフト「VOICEVOX」を使います。",
+            steps=[
+                "公式サイトからVOICEVOXをダウンロード・インストールする",
+                "VOICEVOXを起動する(起動したまま、閉じずに待機させておく)",
+                "本アプリの「ボイス選択」から、使いたいキャラクター・声を選ぶ",
+            ],
+            links=[("公式サイトを開く", "https://voicevox.hiroshiba.jp/")],
+            folder_path=resource_path("optional_installers"),
+        )
 
     def _on_translation_toggle(self):
         settings = load_app_settings()
