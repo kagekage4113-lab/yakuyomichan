@@ -33,6 +33,16 @@ PARAM_DEFS = {
     "volumeScale": ("音量", 0.0, 2.0, 1.0, 0.01),
 }
 
+# 読み上げ内容のフィルター設定。VOICEVOXへ渡すパラメータではなく、
+# 読み上げる「前」にテキスト自体を加工するかどうかの設定のため、
+# main_window.py側でこれらのキーは speak_with_params() に渡す前に
+# 取り除く(pop する)扱いにしている。
+TEXT_FILTER_DEFAULTS = {
+    "filter_urls": True,       # URLを読み上げから除外するか
+    "filter_emoji": True,      # 絵文字・顔文字を読み上げから除外するか
+    "max_speech_chars": 0,     # 読み上げる文字数の上限(0 = 無制限)
+}
+
 DEFAULT_HOTKEY = "Ctrl+Shift+M"  # ミュート切り替えの初期割り当て
 
 
@@ -63,6 +73,7 @@ def save_hotkey_config(config: dict):
 def load_voice_params():
     """保存済みの調整値を読み込む。無ければデフォルト値を返す。"""
     defaults = {key: PARAM_DEFS[key][3] for key in PARAM_DEFS}
+    defaults.update(TEXT_FILTER_DEFAULTS)
     path = writable_path(VOICE_PARAMS_PATH)
     if not os.path.exists(path):
         return defaults
@@ -84,7 +95,7 @@ class VoiceSettingsWindow(tk.Toplevel):
     def __init__(self, master, style_id=None, display_name="(未選択)"):
         super().__init__(master)
         self.title("VOICEVOX 詳細設定")
-        self.geometry("480x460")
+        self.geometry("480x600")
         self.resizable(False, False)
 
         self.style_id = style_id
@@ -99,11 +110,17 @@ class VoiceSettingsWindow(tk.Toplevel):
         self.hotkey_display_var = tk.StringVar(value=self.hotkey_config.get("mute_toggle", DEFAULT_HOTKEY))
         self._capturing_hotkey = False
 
+        # 読み上げ内容のフィルター設定
+        self.filter_urls_var = tk.BooleanVar(value=self.params.get("filter_urls", True))
+        self.filter_emoji_var = tk.BooleanVar(value=self.params.get("filter_emoji", True))
+        self.max_chars_var = tk.StringVar(value=str(self.params.get("max_speech_chars", 0)))
+
         ttk.Label(
             self, text=f"対象ボイス: {display_name}", font=("", 11, "bold"),
         ).pack(pady=(14, 4))
 
         self._build_sliders()
+        self._build_filter_section()
         self._build_hotkey_section()
         self._build_footer()
 
@@ -160,6 +177,53 @@ class VoiceSettingsWindow(tk.Toplevel):
         self.scale_vars[key].set(value)
         self.entry_vars[key].set(f"{value:.2f}")
         self._updating = False
+
+    # ---------- 読み上げ内容のフィルター ----------
+
+    def _build_filter_section(self):
+        frame = ttk.LabelFrame(self, text="読み上げ内容のフィルター", padding=12)
+        frame.pack(fill="x", padx=16, pady=(4, 0))
+
+        ttk.Checkbutton(
+            frame, text="URLを読み上げない", variable=self.filter_urls_var,
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        ttk.Checkbutton(
+            frame, text="絵文字・顔文字・Twitchエモートを読み上げない", variable=self.filter_emoji_var,
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 0))
+
+        ttk.Label(
+            frame,
+            text="Twitchのエモート(スタンプ)が含まれるコメントは、その1件ごと読み上げをスキップします。",
+            foreground="gray", font=("", 8), wraplength=420, justify="left",
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        ttk.Label(frame, text="文字数の上限").grid(row=3, column=0, sticky="w", pady=(6, 0))
+
+        chars_row = ttk.Frame(frame)
+        chars_row.grid(row=3, column=1, sticky="w", pady=(6, 0))
+        entry = ttk.Entry(chars_row, textvariable=self.max_chars_var, width=6, justify="right")
+        entry.pack(side="left")
+        entry.bind("<Return>", lambda e: self._on_max_chars_changed())
+        entry.bind("<FocusOut>", lambda e: self._on_max_chars_changed())
+        ttk.Label(chars_row, text="文字(0で無制限)", foreground="gray").pack(side="left", padx=(6, 0))
+
+        ttk.Label(
+            frame,
+            text="上限を超えた場合、読み上げ末尾に「(以下略)」を付けて打ち切ります。チャット欄には全文が表示されます。",
+            foreground="gray", font=("", 8), wraplength=420, justify="left",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        frame.columnconfigure(1, weight=1)
+
+    def _on_max_chars_changed(self):
+        """文字数入力欄の値を検証し、0以上の整数に丸める"""
+        try:
+            value = int(self.max_chars_var.get())
+        except ValueError:
+            value = 0
+        value = max(0, value)
+        self.max_chars_var.set(str(value))
 
     # ---------- ホットキー設定 ----------
 
@@ -240,13 +304,31 @@ class VoiceSettingsWindow(tk.Toplevel):
         self._updating = False
 
     def _current_params(self):
-        return {key: self.scale_vars[key].get() for key in PARAM_DEFS}
+        """
+        保存・読み上げに使う設定値をまとめて返す。
+        PARAM_DEFS(VOICEVOXの音声パラメータ)に加えて、
+        読み上げ内容のフィルター設定も一緒に保存する。
+        フィルター系のキーは、main_window.py側でVOICEVOXへの
+        API呼び出し直前に取り除かれ(pop)、テキスト前処理にのみ使われる。
+        """
+        params = {key: self.scale_vars[key].get() for key in PARAM_DEFS}
+        self._on_max_chars_changed()  # 保存前に、入力欄の値を一度検証・丸める
+        params["filter_urls"] = self.filter_urls_var.get()
+        params["filter_emoji"] = self.filter_emoji_var.get()
+        try:
+            params["max_speech_chars"] = int(self.max_chars_var.get())
+        except ValueError:
+            params["max_speech_chars"] = 0
+        return params
 
     def _test_play(self):
         if self.style_id is None:
             return
 
-        params = self._current_params()
+        # テスト再生では、VOICEVOXの音声パラメータ(話速等)だけを渡す。
+        # フィルター設定(URL/絵文字除外・文字数上限)はテキスト前処理用の
+        # 設定であり、VOICEVOXのAPIには不要なキーのため含めない。
+        voicevox_params = {key: self.scale_vars[key].get() for key in PARAM_DEFS}
 
         def task():
             try:
@@ -254,7 +336,7 @@ class VoiceSettingsWindow(tk.Toplevel):
                 speak_with_params(
                     "こんにちは、今日もいい天気ですね。",
                     style_id=self.style_id,
-                    params=params,
+                    params=voicevox_params,
                     blocking=True,
                 )
             except Exception as e:

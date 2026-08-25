@@ -61,7 +61,9 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
     より単純な twitchio.Client を直接継承する形に変更している。
 
     on_comment: コメントを受け取るたびに呼ばれるコールバック。
-      on_comment(username: str, message: str) の形で呼ばれる。
+      on_comment(username: str, message: str, has_emote: bool) の形で呼ばれる。
+      has_emote は、メッセージ内にTwitchエモート(スタンプ)が
+      1つでも含まれていれば True になる。
     """
 
     def __init__(self, oauth_token, channel, on_comment):
@@ -92,14 +94,26 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
         username = message.author.name if message.author else "不明"
         content = message.content
 
+        # 【重要】Twitchのスタンプ(エモート)は、実際のメッセージ本文には
+        # "HeyGuys" や "granclFaiar" のような、普通の英単語と見分けが
+        # つかない文字列としてそのまま入っている。VOICEVOXやテキスト側の
+        # フィルターだけでは「これがエモートかどうか」を判定できないため、
+        # Twitch IRCが別途付与してくれる "emotes" タグ(メッセージ中の
+        # どの位置がエモートかを示す位置情報。エモートが無ければ空文字列)を
+        # 直接参照して判定する。位置の詳細までは使わず、「1つでも
+        # 含まれているか」だけを見て、読み上げ側の判断材料として渡す。
+        tags = getattr(message, "tags", None) or {}
+        emotes_tag = tags.get("emotes", "") if isinstance(tags, dict) else ""
+        has_emote = bool(emotes_tag)
+
         if self.on_comment:
-            self.on_comment(username, content)
+            self.on_comment(username, content, has_emote)
 
 
 def start_watching(on_comment):
     """
     設定ファイルの情報を使って、Twitch監視を開始する。
-    on_comment(username, message) が、コメントを受け取るたびに呼ばれる。
+    on_comment(username, message, has_emote) が、コメントを受け取るたびに呼ばれる。
 
     戻り値: 起動できたかどうか(bool)。
       設定が無い・twitchioが無い場合はFalseを返す。
@@ -150,7 +164,8 @@ def stop_watching():
 
 
 if __name__ == "__main__":
-    def print_comment(username, message):
-        print(f"[{username}] {message}")
+    def print_comment(username, message, has_emote):
+        mark = "[エモート含む]" if has_emote else ""
+        print(f"[{username}] {message} {mark}")
 
     start_watching(print_comment)
