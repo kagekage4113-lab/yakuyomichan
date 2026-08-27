@@ -24,9 +24,10 @@ import os
 import threading
 import time
 
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, make_response, render_template_string
 
 from resource_path import resource_path, writable_path
+from overlay_design_window import load_design
 
 app = Flask(__name__)
 
@@ -35,16 +36,25 @@ app = Flask(__name__)
 # エラー自体はPython側の例外として別途捕捉されるので、実害はない。
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-MAX_DISPLAY_LINES = 8  # オーバーレイに表示する行数(画面を圧迫しすぎないよう絞る)
+MAX_DISPLAY_LINES = 8  # overlay_design.jsonが未作成の場合のフォールバック値
+                        # (通常はオーバーレイのデザイン設定画面の「表示行数」で
+                        # 決めた値がoverlay_design.jsonから読み込まれ、こちらは使われない)
 
 _state_lock = threading.Lock()
-_comments = []  # {"platform":..., "user":..., "original":..., "translated":..., "ts":...}
+_comments = []  # {"platform":..., "user":..., "original":..., "translated":..., "emotes":..., "ts":...}
 _display_mode = "translated"  # "off" / "translated" / "both"
 
 
-def push_comment(platform: str, user: str, original: str, translated: str):
+def push_comment(platform: str, user: str, original: str, translated: str, emotes=None):
     """
     メイン画面側から、新しいコメントが処理されるたびに呼び出す。
+
+    emotes: Twitchエモートの位置情報つきリスト
+      ([{"id":..., "start":..., "end":..., "text":...}, ...])。
+      twitch_watcher.py の _parse_emotes_tag() が返す形式そのまま。
+      original(原文)の中の該当位置を、ブラウザ側で実際のエモート
+      画像に差し替えるために使う。YouTube等、対応する概念が無い
+      プラットフォームからは None(=空リスト扱い)で呼ばれる。
     """
     with _state_lock:
         _comments.append({
@@ -52,6 +62,7 @@ def push_comment(platform: str, user: str, original: str, translated: str):
             "user": user,
             "original": original,
             "translated": translated,
+            "emotes": emotes or [],
             "ts": time.time(),
         })
         # 増えすぎないよう、直近の分だけ保持する
@@ -102,9 +113,10 @@ OVERLAY_HTML = """
           return;
         }
 
-        // モード + コメント内容をキー化し、前回描画時と一致するなら
-        // DOMには一切手を触れない(=アニメーションも再生されない)
-        const key = data.mode + "::" + JSON.stringify(data.comments);
+        // モード + レイアウト設定 + コメント内容をキー化し、前回描画時と
+        // 一致するならDOMには一切手を触れない(=アニメーションも再生されない)
+        const key = data.mode + "::" + data.stacked_layout + "::" + data.show_original
+                  + "::" + JSON.stringify(data.comments);
         if (key === lastRenderedKey) {
           return;
         }
@@ -115,9 +127,45 @@ OVERLAY_HTML = """
           const line = document.createElement("div");
           line.className = "chat-line";
 
-          let html = `<span class="chat-user">${escapeHtml(c.user)}</span>${escapeHtml(c.translated)}`;
-          if (data.mode === "both" && c.original) {
-            html += `<div class="chat-original">${escapeHtml(c.original)}</div>`;
+          const emotes = c.emotes || [];
+
+          // 【重要】main_window.py側で、エモートを含むコメントは
+          // そもそも翻訳を挟まない設計にしている(翻訳するとエモート名が
+          // 意味不明な訳文になり、かつ文字位置もズレてしまうため)。
+          // そのため、emotesが存在する行の c.translated は、常に
+          // 「翻訳されていない原文そのもの」であることが保証されており、
+          // 文字位置もemotesの位置情報とズレない。よって、翻訳側・原文側
+          // どちらであっても、renderWithEmotesで正確な位置に画像を
+          // 差し込める(以前あった「末尾にまとめて添えるだけ」という
+          // 妥協策は、この設計変更により不要になった)。
+          let translatedHtml = renderWithEmotes(c.translated, emotes);
+
+          // 【重要】以前は data.mode === "both" (メイン画面の「表示」
+          // メニュー内の字幕モード)だけで原文表示の有無を判定しており、
+          // オーバーレイのデザイン設定画面から直接コントロールする
+          // 手段が無かった(メニューの奥に隠れていて気づきにくい、
+          // という指摘があった)。デザイン設定の「show_original」を
+          // 直接見るようにし、ここで完結して切り替えられるようにする。
+          const hasOriginal = data.show_original && !!c.original;
+
+          let html;
+          if (data.stacked_layout) {
+            // 3行レイアウト: ユーザー名 / コメント本文(原文) / 翻訳文(あれば)
+            // を、それぞれ独立した行として縦に並べる。
+            html = `<div class="chat-user-line">${escapeHtml(c.user)}</div>`;
+            if (hasOriginal) {
+              html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;
+              html += `<div class="chat-translated">${translatedHtml}</div>`;
+            } else {
+              html += `<div class="chat-translated">${translatedHtml}</div>`;
+            }
+          } else {
+            // 従来のレイアウト: ユーザー名と本文が同じ行に表示される
+            html = `<span class="chat-user">${escapeHtml(c.user)}</span>${translatedHtml}`;
+            if (hasOriginal) {
+              // 原文側は、実際の文字位置に沿って正確にエモート画像を差し込める
+              html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;
+            }
           }
           line.innerHTML = html;
           container.appendChild(line);
@@ -131,6 +179,36 @@ OVERLAY_HTML = """
       const div = document.createElement("div");
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function emoteImgTag(emote) {
+      const url = `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(emote.id)}/default/dark/2.0`;
+      const alt = escapeHtml(emote.text || "");
+      return `<img class="chat-emote" src="${url}" alt="${alt}" title="${alt}" `
+           + `style="height:1.3em;vertical-align:middle;margin:0 2px;">`;
+    }
+
+    function renderWithEmotes(text, emotes) {
+      if (!emotes || emotes.length === 0) {
+        return escapeHtml(text);
+      }
+      let html = "";
+      let cursor = 0;
+      // emotesは出現位置(start)順に並んでいる前提(twitch_watcher.py側でsort済み)
+      emotes.forEach(e => {
+        if (e.start < cursor || e.start > text.length) {
+          return;  // 想定外の位置(既に処理済みの範囲と重複、等)は安全のため無視
+        }
+        if (e.start > cursor) {
+          html += escapeHtml(text.slice(cursor, e.start));
+        }
+        html += emoteImgTag(e);
+        cursor = e.end + 1;
+      });
+      if (cursor < text.length) {
+        html += escapeHtml(text.slice(cursor));
+      }
+      return html;
     }
 
     // --- デザイン設定(CSS)の自動再読み込み ---
@@ -171,7 +249,16 @@ DEFAULT_CSS_PATH = "overlay_style.css"
 @app.route("/overlay")
 def overlay():
     print("[overlay_server] オーバーレイに接続されました。(OBS等のブラウザソースが開かれました)")
-    return render_template_string(OVERLAY_HTML)
+    # 【重要】このページ(HTML+JS本体)自体がブラウザ/OBSにキャッシュされると、
+    # アプリを新しいバージョンに更新しても、OBS側で「ソースを更新」
+    # (あるいはOBS再起動)しない限り、古いJSのまま動き続けてしまう
+    # (CSSは別途バージョン管理してポーリング再取得しているが、
+    # HTML/JS本体はこれまでキャッシュ制御をしていなかった)。
+    # 明示的にキャッシュ禁止ヘッダーを付けることで、この事故を防ぐ。
+    response = make_response(render_template_string(OVERLAY_HTML))
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 def _get_css_path() -> str:
@@ -220,16 +307,31 @@ def overlay_css():
             "padding:8px 12px;margin-bottom:6px;color:#fff;font-size:18px;}"
             ".chat-user{font-weight:bold;color:#7fd4ff;margin-right:6px;}"
             ".chat-original{color:#aaa;font-size:14px;margin-top:2px;}"
+            ".chat-user-line{font-weight:bold;color:#7fd4ff;}"
+            ".chat-translated{margin-top:2px;}"
         )
     return css, 200, {"Content-Type": "text/css; charset=utf-8"}
 
 
 @app.route("/api/comments")
 def api_comments():
+    # 表示行数・レイアウト設定は、オーバーレイのデザイン設定画面
+    # (overlay_design_window.py)でユーザーが調整した値
+    # (overlay_design.json)をその都度読み込む。設定画面をまだ一度も
+    # 開いていない/保存していない場合は、load_design()がデフォルト値を
+    # 返すので、常にどちらかの値で正しく動作する。
+    design = load_design()
+    max_lines = design.get("max_lines", MAX_DISPLAY_LINES)
+    stacked_layout = design.get("stacked_layout", False)
+    show_original = design.get("show_original", True)
+
     with _state_lock:
-        recent = _comments[-MAX_DISPLAY_LINES:]
+        recent = _comments[-max_lines:] if max_lines > 0 else []
         mode = _display_mode
-    return jsonify({"mode": mode, "comments": recent})
+    return jsonify({
+        "mode": mode, "comments": recent,
+        "stacked_layout": stacked_layout, "show_original": show_original,
+    })
 
 
 @app.route("/api/css-version")
@@ -261,6 +363,17 @@ if __name__ == "__main__":
     # 動作確認用: ダミーコメントを入れてサーバーを起動する
     push_comment("twitch", "user_92", "Hello! nice stream today", "こんにちは、今日も配信いいね")
     push_comment("youtube", "たろう", "", "今日のご飯なに食べたの?")
+    # エモート付きコメントの表示確認用(実在のTwitchエモートID "25" = Kappa を使用)。
+    # 【重要】main_window.py側の設計により、エモートを含むコメントは翻訳を
+    # 挟まないため、translatedとoriginalは同じ原文になる(位置情報が
+    # ズレないようにするため)。ここでも実際の挙動に合わせている。
+    push_comment(
+        "twitch", "emote_user", "", "Kappa nice one Kappa",
+        emotes=[
+            {"id": "25", "start": 0, "end": 4, "text": "Kappa"},
+            {"id": "25", "start": 15, "end": 19, "text": "Kappa"},
+        ],
+    )
     set_display_mode("both")
     print("http://127.0.0.1:8765/overlay をブラウザで開いて確認してください。")
     run_server()

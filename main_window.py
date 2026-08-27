@@ -59,7 +59,7 @@ ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
 APP_NAME = "やく読みちゃん"
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.4.0"
 README_PATH = "README_ja.txt"
 
 # アップデート確認先のGitHubリポジトリ("ユーザー名/リポジトリ名")
@@ -927,11 +927,13 @@ class MainWindow(tk.Tk):
         self.console.log("YouTubeの監視を停止しました。")
 
     def _start_watching_twitch(self):
-        def on_comment(username, message, has_emote=False):
+        def on_comment(username, message, has_emote=False, emotes=None):
             # twitchioのイベントは別スレッド(asyncioループ)から呼ばれるため、
             # Tkinterウィジェットの操作はself.afterでメインスレッドに戻して行う
             self._safe_after(
-                lambda: self._handle_comment("twitch", username, message, has_emote=has_emote),
+                lambda: self._handle_comment(
+                    "twitch", username, message, has_emote=has_emote, emotes=emotes,
+                ),
             )
 
         def run_bot():
@@ -967,7 +969,7 @@ class MainWindow(tk.Tk):
         threading.Thread(target=run_watcher, daemon=True).start()
         self.console.log("YouTubeチャット監視を開始しました。(数秒間隔のポーリング方式です)")
 
-    def _handle_comment(self, platform, username, message, has_emote=False):
+    def _handle_comment(self, platform, username, message, has_emote=False, emotes=None):
         """
         1件のコメントを受け取り、判定→翻訳→読み上げ→チャット欄反映まで行う。
 
@@ -975,15 +977,46 @@ class MainWindow(tk.Tk):
           twitch_watcher.py が、IRCの emotes タグを見て判定した結果を
           そのまま受け取る(YouTube側には対応する概念が無いため、
           常にFalseになる)。
+        emotes: has_emoteの元になった、位置情報つきのエモート一覧
+          ([{"id":..., "start":..., "end":..., "text":...}, ...])。
+          オーバーレイ側で、原文中のエモート部分を実際の画像に
+          差し替えるために使う。
         """
+        emotes = emotes or []
         if self.selected_style_id is None:
             self.console.log("ボイスが選択されていません。VOICEVOXメニューから選んでください。", level="error")
             return
 
         def process():
+            # 【重要】フィルター設定(filter_emoji等)は、翻訳するかどうかの
+            # 判断にも使うため、先に読み込んでおく。
+            voice_params = dict(load_voice_params())
+            filter_urls = voice_params.pop("filter_urls", True)
+            filter_emoji = voice_params.pop("filter_emoji", True)
+            max_speech_chars = voice_params.pop("max_speech_chars", 0)
+            emote_announce_enabled = voice_params.pop("emote_announce_enabled", False)
+            emote_announce_text = voice_params.pop("emote_announce_text", "エモートが届きました")
+
+            # 【重要・設計判断】Twitchのエモートが含まれるコメントは、
+            # あえて翻訳を挟まない。理由は2つ:
+            # 1. エモート名("Kappa"等)は普通の英単語と見分けがつかないため、
+            #    翻訳に渡すとLLMがそれっぽく「音写」してしまい、
+            #    意味不明な訳文になる(例:「Kappa」→「かっぱ」等)
+            # 2. 翻訳によって文章の並びが変わると、IRCのemotesタグが
+            #    示す文字位置と、訳文中の位置がズレてしまい、オーバーレイ側で
+            #    正確な位置にエモート画像を差し込めなくなる
+            # エモートを含む場合は、Twitch公式チャットと同じように、
+            # 原文をそのまま(翻訳せずに)チャット欄・オーバーレイへ流す。
+            # (filter_emojiの設定がONの場合のみ。OFFなら、これまで通り
+            # 普通に翻訳の要否を判定する)
+            emote_passthrough = has_emote and filter_emoji
+
             translation_enabled = load_app_settings().get("translation_enabled", True)
 
-            if translation_enabled and needs_translation(message):
+            if emote_passthrough:
+                translated = message
+                original_for_display = ""
+            elif translation_enabled and needs_translation(message):
                 translated = translate_to_japanese(message)
                 original_for_display = message
             else:
@@ -1007,33 +1040,7 @@ class MainWindow(tk.Tk):
             # メイン画面の音量ゲージ・ミュート状態(volume_multiplier)を
             # そのうえから掛け合わせてから speak_with_params() に渡す
             # ことで、両方の設定が同時に効くようにする。
-            voice_params = dict(load_voice_params())
-
-            # 読み上げ内容のフィルター設定(URL除外・絵文字除外・文字数上限)は
-            # VOICEVOXのAPIパラメータではなく、読み上げるテキスト自体を
-            # 事前に加工するための設定なので、ここで取り出して(pop)、
-            # 残りをVOICEVOXへの音声パラメータとして使う。
-            # 【重要】チャット欄・オーバーレイの表示(translated)自体は
-            # このフィルターの影響を受けない。あくまで「実際に読み上げる
-            # 音声」だけがURL・絵文字を飛ばしたり、文字数で打ち切られたり
-            # する。ユーザーが画面で見る内容は常に全文のままにするため。
-            filter_urls = voice_params.pop("filter_urls", True)
-            filter_emoji = voice_params.pop("filter_emoji", True)
-            max_speech_chars = voice_params.pop("max_speech_chars", 0)
-
             voice_params["volumeScale"] = voice_params.get("volumeScale", 1.0) * volume_multiplier
-
-            # 【重要】Twitchのエモート(スタンプ)は、メッセージ本文の中では
-            # 普通の英単語と見分けがつかない文字列("HeyGuys"等)として
-            # そのまま入っているため、テキストのパターンマッチだけでは
-            # 確実に除外できない。twitch_watcher.py側でIRCの emotes タグを
-            # 見て判定した has_emote フラグが立っている場合は、
-            # そのコメント自体の読み上げを丸ごとスキップする
-            # (filter_emojiの設定がONの場合のみ。OFFならこれまで通り
-            # 普通に読み上げる)。
-            # チャット欄・オーバーレイへの表示・ログ記録は、これまで通り
-            # 全文のまま行う。
-            skip_speech_for_emote = has_emote and filter_emoji
 
             speech_text = prepare_text_for_speech(
                 translated,
@@ -1042,15 +1049,29 @@ class MainWindow(tk.Tk):
                 max_chars=max_speech_chars,
             )
 
-            # フィルターの結果、読み上げる内容が空になることがある
-            # (例: コメントがURLだけ、絵文字だけだった場合)。
-            # その場合は無理に空文字列を読み上げようとせず、スキップする。
-            if speech_text.strip() and not skip_speech_for_emote:
+            # 【重要】エモートを含むコメント(emote_passthrough)は、
+            # 本文自体をそのまま自然に読み上げるのが技術的に難しいため
+            # (前述の通り、翻訳を挟まないと英単語風の羅列がそのまま
+            # 読まれてしまう)、コメント本文の読み上げは行わない。
+            # その代わり、設定でONにしていれば、固定の一言
+            # (例:「エモートが届きました」)だけを読み上げる。
+            # これにより「エモート付きコメントの時だけ、配信者が
+            # 気づける音が鳴らない」という不便さを解消できる。
+            # チャット欄・オーバーレイへの表示・ログ記録は、これまで通り
+            # 全文のまま行う。
+            if emote_passthrough:
+                if emote_announce_enabled and emote_announce_text.strip():
+                    speak_with_params(
+                        emote_announce_text, style_id=self.selected_style_id,
+                        params=voice_params, blocking=False,
+                    )
+                # emote_announce_enabledがOFFの場合は、これまで通り何も読み上げない
+            elif speech_text.strip():
                 speak_with_params(
                     speech_text, style_id=self.selected_style_id, params=voice_params, blocking=False,
                 )
 
-            overlay_server.push_comment(platform, username, original_for_display, translated)
+            overlay_server.push_comment(platform, username, original_for_display, translated, emotes=emotes)
             chat_logger.log_comment(platform, username, original_for_display, translated)
 
             self._safe_after(lambda: self.add_chat_row(platform, username, original_for_display, translated))

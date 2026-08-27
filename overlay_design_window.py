@@ -57,6 +57,12 @@ DEFAULT_DESIGN = {
     "corner_radius": 8,
     "max_lines": 8,     # オーバーレイに同時表示するコメントの最大行数
                         # (これを超えた古い行から自動的に消えていく)
+    "stacked_layout": False,  # True: ユーザー名/コメント本文/翻訳文を
+                              # それぞれ独立した行に縦に並べて表示する。
+                              # False(デフォルト): ユーザー名と本文を
+                              # 同じ行に表示する、従来のレイアウト。
+    "show_original": True,   # 原文(翻訳前のコメント)も一緒に表示するか。
+                              # Falseなら翻訳文だけを表示する。
 }
 
 # 各色項目につき24色のプリセットパレット。
@@ -126,6 +132,19 @@ def build_css(design: dict) -> str:
 .chat-original {{
   color: {design['original_color']};
   font-size: {max(design['font_size'] - 4, 10)}px;
+  margin-top: 2px;
+}}
+
+/* 「ユーザー名を独立した行にする(3行レイアウト)」ON時に使われるクラス。
+   .chat-user(同じ行に表示する従来レイアウト用)とは別に用意している。 */
+.chat-user-line {{
+  font-weight: {'bold' if design.get('user_bold', True) else 'normal'};
+  text-decoration: {'underline' if design.get('user_underline', False) else 'none'};
+  color: {design['user_color']};
+  font-size: {design.get('user_font_size', design['font_size'])}px;
+}}
+
+.chat-translated {{
   margin-top: 2px;
 }}
 
@@ -212,12 +231,29 @@ class OverlayDesignWindow(tk.Toplevel):
         required_height = self.winfo_reqheight()
         self.geometry(f"{required_width}x{required_height}")
 
-        # プレビュー(Canvas)の描画は、ウィンドウの最終サイズが
-        # 確定してから行う。geometry("1x1")での一時的な縮小の影響で
-        # <Configure>イベントが複数回発火し、その都度_update_previewが
-        # 呼ばれることがあるため、全てのイベント処理が完了した後に
-        # 確実に最後の描画を行うよう、after_idleで遅延実行する。
+        # 【重要・不具合修正】プレビュー(Canvas)は、構築直後は仮の
+        # 固定高さ(100px)で作られており、実際の設定(3行レイアウト
+        # + 原文表示、等)に応じた本来の高さは _update_preview() が
+        # 呼ばれて初めて確定する。以前は、この _update_preview() を
+        # after_idle で「ウィンドウサイズ確定後」に遅延実行していたため、
+        # プレビューが仮の高さより大きくなるケース(3行レイアウト等)で、
+        # ウィンドウの高さがそれに追従できず、フッターの
+        # 「保存して閉じる」ボタンがウィンドウ下端からはみ出して
+        # 見切れてしまう不具合が起きていた。
+        # そこで、ここで一度 _update_preview() を同期的に呼んで
+        # プレビューの最終的な高さを確定させてから、改めて
+        # ウィンドウサイズを測り直し(2段階目のフィット)、
+        # はみ出しが起きないようにする。
         self.update_idletasks()
+        self._update_preview()
+        self.update_idletasks()
+        required_width = self.winfo_reqwidth()
+        required_height = self.winfo_reqheight()
+        self.geometry(f"{required_width}x{required_height}")
+
+        # 上記の2段階目フィットの過程で、Canvasの<Configure>イベントが
+        # 再度発火して_update_previewが呼ばれることがあるため、
+        # 念のため全てのイベント処理が完了した後にもう一度描画しておく。
         self.after_idle(self._update_preview)
 
     # ---------- フォント ----------
@@ -461,6 +497,29 @@ class OverlayDesignWindow(tk.Toplevel):
 
             row_i += 1
 
+        # ユーザー名を独立した行にするかどうかの切り替え(3行レイアウト)。
+        # スライダーではなく単純なON/OFFなので、専用のCheckbuttonを用意する。
+        stacked_var = tk.BooleanVar(value=self.design.get("stacked_layout", False))
+        self.style_vars["stacked_layout"] = stacked_var
+        ttk.Checkbutton(
+            frame, text="ユーザー名を独立した行にする(3行レイアウト)",
+            variable=stacked_var, command=self._on_change,
+        ).grid(row=row_i, column=0, columnspan=5, sticky="w", pady=(6, 0))
+        row_i += 1
+
+        # 原文(翻訳前のコメント)を表示するかどうかの切り替え。
+        # 【重要】以前は、これを切り替える手段がメイン画面の
+        # 「表示」メニュー内の字幕モード(翻訳のみ/原文+翻訳)しか無く、
+        # ここで見つけにくかった。デザイン設定画面からも直接
+        # 切り替えられるようにする。
+        show_original_var = tk.BooleanVar(value=self.design.get("show_original", True))
+        self.style_vars["show_original"] = show_original_var
+        ttk.Checkbutton(
+            frame, text="原文(翻訳前のコメント)も表示する",
+            variable=show_original_var, command=self._on_change,
+        ).grid(row=row_i, column=0, columnspan=5, sticky="w", pady=(2, 0))
+        row_i += 1
+
         ttk.Button(frame, text="サイズ設定を初期値に戻す", command=self._reset_sizes).grid(
             row=row_i, column=0, columnspan=5, sticky="e", pady=(8, 0),
         )
@@ -470,7 +529,8 @@ class OverlayDesignWindow(tk.Toplevel):
             self.design[key] = DEFAULT_DESIGN[key]
             self.scale_vars[key].set(self.design[key])
             self.entry_vars[key].set(str(self.design[key]))
-        for key in ("comment_bold", "comment_underline", "user_bold", "user_underline"):
+        for key in ("comment_bold", "comment_underline", "user_bold", "user_underline",
+                    "stacked_layout", "show_original"):
             self.design[key] = DEFAULT_DESIGN[key]
             self.style_vars[key].set(self.design[key])
         self._on_change()
@@ -548,6 +608,22 @@ class OverlayDesignWindow(tk.Toplevel):
         # 幅を使って描画されるようにする。
         self.preview_canvas.bind("<Configure>", lambda e: self._update_preview())
 
+    def _set_preview_canvas_height(self, canvas, height):
+        """
+        プレビューCanvasの高さを変更する。
+        【重要】このCanvasの<Configure>イベントに_update_preview()を
+        バインドしているため、無条件にcanvas.config(height=...)を呼ぶと、
+        高さの変更が新たな<Configure>イベントを誘発し、
+        _update_preview()が再帰的に呼ばれてしまう可能性がある
+        (実際には値が収束して1往復で止まるはずだが、念のため
+        高さが実際に変わる場合だけ更新するようにして、無駄な
+        再描画・潜在的なちらつきを防いでいる)。
+        """
+        if getattr(self, "_preview_canvas_height", None) == height:
+            return
+        self._preview_canvas_height = height
+        canvas.config(height=height)
+
     def _draw_rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs):
         """Canvas上に角丸の四角形を描画するヘルパー"""
         points = [
@@ -606,31 +682,84 @@ class OverlayDesignWindow(tk.Toplevel):
 
         canvas_width = canvas.winfo_width() or 400
 
-        self._draw_rounded_rect(
-            canvas, 10, 12, canvas_width - 10, 80, radius,
-            fill=mixed_color, outline="",
-        )
+        stacked_layout = design.get("stacked_layout", False)
+        show_original = design.get("show_original", True)
 
-        # ユーザー名とコメント本文を別々に描画することで、
-        # それぞれ異なる文字サイズ・太字・下線設定を反映できるようにしている
-        user_text_id = canvas.create_text(
-            22, 30, anchor="w",
-            text="user_92",
-            fill=design["user_color"], font=user_font,
-        )
-        user_bbox = canvas.bbox(user_text_id)
-        comment_x = (user_bbox[2] + 8) if user_bbox else 100
+        # 【重要】以前はここで常に「ユーザー名+本文が同じ行、原文はその下」
+        # という決め打ちのレイアウトで描画しており、stacked_layout・
+        # show_originalの設定を変えても、このプレビューだけは見た目が
+        # 一切変わらないという不具合があった(実際のオーバーレイのJS側は
+        # ちゃんと設定を反映していたが、このCanvasプレビューだけ
+        # 追従できていなかった)。設定に応じて描画するテキスト行を
+        # 組み立て直すようにする。
 
-        canvas.create_text(
-            comment_x, 30, anchor="w",
-            text="こんにちは、今日も配信いいね",
-            fill=design["text_color"], font=comment_font,
-        )
-        canvas.create_text(
-            22, 58, anchor="w",
-            text="Hello! nice stream today",
-            fill=design["original_color"], font=(font_family, original_font_size),
-        )
+        USER_TEXT = "user_92"
+        COMMENT_TEXT = "こんにちは、今日も配信いいね"
+        ORIGINAL_TEXT = "Hello! nice stream today"
+
+        original_font = (font_family, original_font_size)
+
+        if stacked_layout:
+            # 3行レイアウト: ユーザー名 / 原文(表示する場合) / 翻訳文
+            lines = [("user", USER_TEXT)]
+            if show_original:
+                lines.append(("original", ORIGINAL_TEXT))
+            lines.append(("comment", COMMENT_TEXT))
+
+            line_height = 24
+            box_height = 20 + line_height * len(lines)
+            self._draw_rounded_rect(
+                canvas, 10, 12, canvas_width - 10, 12 + box_height, radius,
+                fill=mixed_color, outline="",
+            )
+
+            y = 12 + 18
+            for kind, text in lines:
+                if kind == "user":
+                    canvas.create_text(
+                        22, y, anchor="w", text=text,
+                        fill=design["user_color"], font=user_font,
+                    )
+                elif kind == "original":
+                    canvas.create_text(
+                        22, y, anchor="w", text=text,
+                        fill=design["original_color"], font=original_font,
+                    )
+                else:
+                    canvas.create_text(
+                        22, y, anchor="w", text=text,
+                        fill=design["text_color"], font=comment_font,
+                    )
+                y += line_height
+
+            self._set_preview_canvas_height(canvas, box_height + 24)
+        else:
+            # 従来レイアウト: ユーザー名+翻訳文が同じ行、原文はその下(表示する場合)
+            box_height = 68 if show_original else 40
+            self._draw_rounded_rect(
+                canvas, 10, 12, canvas_width - 10, 12 + box_height, radius,
+                fill=mixed_color, outline="",
+            )
+
+            user_text_id = canvas.create_text(
+                22, 30, anchor="w", text=USER_TEXT,
+                fill=design["user_color"], font=user_font,
+            )
+            user_bbox = canvas.bbox(user_text_id)
+            comment_x = (user_bbox[2] + 8) if user_bbox else 100
+
+            canvas.create_text(
+                comment_x, 30, anchor="w", text=COMMENT_TEXT,
+                fill=design["text_color"], font=comment_font,
+            )
+
+            if show_original:
+                canvas.create_text(
+                    22, 58, anchor="w", text=ORIGINAL_TEXT,
+                    fill=design["original_color"], font=original_font,
+                )
+
+            self._set_preview_canvas_height(canvas, box_height + 24)
 
     # ---------- フッター ----------
 

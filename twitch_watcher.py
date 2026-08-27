@@ -35,6 +35,48 @@ _running_bots = []  # 停止処理のために、起動中のBotインスタン�
 _is_stopped = {"value": False}  # bot.close()が効かない場合の保険用フラグ
 
 
+def _parse_emotes_tag(emotes_tag, message_text):
+    """
+    Twitch IRCの emotes タグを解析する。
+
+    タグの形式(例): "25:0-4,12-16/1902:6-10"
+    → エモートID "25" が 0〜4文字目と12〜16文字目に、
+       エモートID "1902" が 6〜10文字目に、それぞれ出現する
+      (開始・終了とも0始まり、終了位置も含む)
+
+    戻り値: [{"id": "25", "start": 0, "end": 4, "text": "Kappa"}, ...] の
+    ような、出現位置順に並んだリスト。エモートが無ければ空リスト。
+
+    このオーバーレイ側での実際の画像表示(<img>タグへの差し替え)は
+    main_window.py → overlay_server.py の流れで行われる。
+    """
+    if not emotes_tag:
+        return []
+
+    emotes = []
+    for part in emotes_tag.split("/"):
+        if ":" not in part:
+            continue
+        emote_id, ranges_str = part.split(":", 1)
+        for rng in ranges_str.split(","):
+            if "-" not in rng:
+                continue
+            start_str, end_str = rng.split("-", 1)
+            try:
+                start, end = int(start_str), int(end_str)
+            except ValueError:
+                continue
+            emotes.append({
+                "id": emote_id,
+                "start": start,
+                "end": end,
+                "text": message_text[start:end + 1],
+            })
+
+    emotes.sort(key=lambda e: e["start"])
+    return emotes
+
+
 def load_token_config():
     """
     token_config.json からTwitchの接続情報を読み込む。
@@ -61,9 +103,12 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
     より単純な twitchio.Client を直接継承する形に変更している。
 
     on_comment: コメントを受け取るたびに呼ばれるコールバック。
-      on_comment(username: str, message: str, has_emote: bool) の形で呼ばれる。
+      on_comment(username: str, message: str, has_emote: bool, emotes: list) の
+      形で呼ばれる。
       has_emote は、メッセージ内にTwitchエモート(スタンプ)が
       1つでも含まれていれば True になる。
+      emotes は _parse_emotes_tag() が返す、位置情報つきのリスト
+      (オーバーレイ側で実際の画像に差し替えるために使う)。
     """
 
     def __init__(self, oauth_token, channel, on_comment):
@@ -100,20 +145,21 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
         # フィルターだけでは「これがエモートかどうか」を判定できないため、
         # Twitch IRCが別途付与してくれる "emotes" タグ(メッセージ中の
         # どの位置がエモートかを示す位置情報。エモートが無ければ空文字列)を
-        # 直接参照して判定する。位置の詳細までは使わず、「1つでも
-        # 含まれているか」だけを見て、読み上げ側の判断材料として渡す。
+        # 直接参照して判定する。
         tags = getattr(message, "tags", None) or {}
         emotes_tag = tags.get("emotes", "") if isinstance(tags, dict) else ""
-        has_emote = bool(emotes_tag)
+        emotes = _parse_emotes_tag(emotes_tag, content)
+        has_emote = bool(emotes)
 
         if self.on_comment:
-            self.on_comment(username, content, has_emote)
+            self.on_comment(username, content, has_emote, emotes)
 
 
 def start_watching(on_comment):
     """
     設定ファイルの情報を使って、Twitch監視を開始する。
-    on_comment(username, message, has_emote) が、コメントを受け取るたびに呼ばれる。
+    on_comment(username, message, has_emote, emotes) が、
+    コメントを受け取るたびに呼ばれる。
 
     戻り値: 起動できたかどうか(bool)。
       設定が無い・twitchioが無い場合はFalseを返す。
@@ -164,8 +210,8 @@ def stop_watching():
 
 
 if __name__ == "__main__":
-    def print_comment(username, message, has_emote):
-        mark = "[エモート含む]" if has_emote else ""
+    def print_comment(username, message, has_emote, emotes):
+        mark = f"[エモート{len(emotes)}個]" if has_emote else ""
         print(f"[{username}] {message} {mark}")
 
     start_watching(print_comment)

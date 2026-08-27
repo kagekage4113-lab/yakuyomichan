@@ -41,6 +41,8 @@ TEXT_FILTER_DEFAULTS = {
     "filter_urls": True,       # URLを読み上げから除外するか
     "filter_emoji": True,      # 絵文字・顔文字を読み上げから除外するか
     "max_speech_chars": 0,     # 読み上げる文字数の上限(0 = 無制限)
+    "emote_announce_enabled": False,     # エモート付きコメントの代わりに一言読み上げるか
+    "emote_announce_text": "エモートが届きました",  # その際に読み上げる文言
 }
 
 DEFAULT_HOTKEY = "Ctrl+Shift+M"  # ミュート切り替えの初期割り当て
@@ -95,7 +97,7 @@ class VoiceSettingsWindow(tk.Toplevel):
     def __init__(self, master, style_id=None, display_name="(未選択)"):
         super().__init__(master)
         self.title("VOICEVOX 詳細設定")
-        self.geometry("480x600")
+        self.geometry("480x660")
         self.resizable(False, False)
 
         self.style_id = style_id
@@ -114,6 +116,14 @@ class VoiceSettingsWindow(tk.Toplevel):
         self.filter_urls_var = tk.BooleanVar(value=self.params.get("filter_urls", True))
         self.filter_emoji_var = tk.BooleanVar(value=self.params.get("filter_emoji", True))
         self.max_chars_var = tk.StringVar(value=str(self.params.get("max_speech_chars", 0)))
+
+        # エモートを含むコメントは、本文自体は読み上げない(技術的な理由。
+        # 詳しくはUIの説明文を参照)代わりに、固定の一言だけ読み上げる
+        # ことができるようにするための設定。
+        self.emote_announce_var = tk.BooleanVar(value=self.params.get("emote_announce_enabled", False))
+        self.emote_announce_text_var = tk.StringVar(
+            value=self.params.get("emote_announce_text", "エモートが届きました"),
+        )
 
         ttk.Label(
             self, text=f"対象ボイス: {display_name}", font=("", 11, "bold"),
@@ -194,14 +204,33 @@ class VoiceSettingsWindow(tk.Toplevel):
 
         ttk.Label(
             frame,
-            text="Twitchのエモート(スタンプ)が含まれるコメントは、その1件ごと読み上げをスキップします。",
+            text="Twitchのエモート(スタンプ)が含まれるコメントは、翻訳・読み上げをせず、\n"
+                 "公式チャットと同じ原文のまま表示します。",
             foreground="gray", font=("", 8), wraplength=420, justify="left",
         ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
-        ttk.Label(frame, text="文字数の上限").grid(row=3, column=0, sticky="w", pady=(6, 0))
+        self.emote_announce_check = ttk.Checkbutton(
+            frame, text="エモートを含むコメントは代わりに一言読み上げる",
+            variable=self.emote_announce_var, command=self._on_emote_announce_toggled,
+        )
+        self.emote_announce_check.grid(row=3, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
+        self.emote_announce_entry = ttk.Entry(frame, textvariable=self.emote_announce_text_var, width=30)
+        self.emote_announce_entry.grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 4), padx=(20, 0))
+
+        ttk.Label(
+            frame,
+            text="コメント本文の代わりに、この文言を読み上げます\n"
+                 "(エモート部分を自然に読み上げるのは技術的に難しいため、固定の一言のみ対応しています)。",
+            foreground="gray", font=("", 8), wraplength=420, justify="left",
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        self._on_emote_announce_toggled()  # 初期状態(入力欄の有効/無効)を反映しておく
+
+        ttk.Label(frame, text="文字数の上限").grid(row=6, column=0, sticky="w", pady=(6, 0))
 
         chars_row = ttk.Frame(frame)
-        chars_row.grid(row=3, column=1, sticky="w", pady=(6, 0))
+        chars_row.grid(row=6, column=1, sticky="w", pady=(6, 0))
         entry = ttk.Entry(chars_row, textvariable=self.max_chars_var, width=6, justify="right")
         entry.pack(side="left")
         entry.bind("<Return>", lambda e: self._on_max_chars_changed())
@@ -212,9 +241,16 @@ class VoiceSettingsWindow(tk.Toplevel):
             frame,
             text="上限を超えた場合、読み上げ末尾に「(以下略)」を付けて打ち切ります。チャット欄には全文が表示されます。",
             foreground="gray", font=("", 8), wraplength=420, justify="left",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         frame.columnconfigure(1, weight=1)
+
+    def _on_emote_announce_toggled(self):
+        """チェックの有無に応じて、読み上げ文言の入力欄を有効/無効にする"""
+        if self.emote_announce_var.get():
+            self.emote_announce_entry.state(["!disabled"])
+        else:
+            self.emote_announce_entry.state(["disabled"])
 
     def _on_max_chars_changed(self):
         """文字数入力欄の値を検証し、0以上の整数に丸める"""
@@ -315,6 +351,8 @@ class VoiceSettingsWindow(tk.Toplevel):
         self._on_max_chars_changed()  # 保存前に、入力欄の値を一度検証・丸める
         params["filter_urls"] = self.filter_urls_var.get()
         params["filter_emoji"] = self.filter_emoji_var.get()
+        params["emote_announce_enabled"] = self.emote_announce_var.get()
+        params["emote_announce_text"] = self.emote_announce_text_var.get()
         try:
             params["max_speech_chars"] = int(self.max_chars_var.get())
         except ValueError:
