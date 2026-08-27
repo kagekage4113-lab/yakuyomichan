@@ -29,11 +29,12 @@ class TokenSettingsWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
         self.title("配信トークン設定")
-        self.geometry("520x420")
+        self.geometry("520x560")
         self.resizable(False, False)
 
         self.vars = {
             "twitch_oauth": tk.StringVar(),
+            "twitch_client_id": tk.StringVar(),
             "twitch_channel": tk.StringVar(),
             "youtube_api_key": tk.StringVar(),
             "youtube_video_id": tk.StringVar(),
@@ -67,6 +68,7 @@ class TokenSettingsWindow(tk.Toplevel):
 
         twitch = data.get("twitch", {})
         self.vars["twitch_oauth"].set(twitch.get("oauth_token", ""))
+        self.vars["twitch_client_id"].set(twitch.get("client_id", ""))
         self.vars["twitch_channel"].set(twitch.get("channel", ""))
 
         youtube = data.get("youtube", {})
@@ -95,14 +97,33 @@ class TokenSettingsWindow(tk.Toplevel):
             foreground="gray", font=("", 8), wraplength=440, justify="left",
         ).grid(row=1, column=0, columnspan=3, sticky="w")
 
-        ttk.Label(frame, text="チャンネル名").grid(row=2, column=0, sticky="w", pady=(10, 4))
+        ttk.Label(frame, text="Client ID (任意)").grid(row=2, column=0, sticky="w", pady=(10, 4))
+        client_id_entry = ttk.Entry(frame, textvariable=self.vars["twitch_client_id"], show="*", width=40)
+        client_id_entry.grid(row=2, column=1, sticky="ew", pady=(10, 4))
+
+        client_id_show_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            frame, text="表示", variable=client_id_show_var,
+            command=lambda: client_id_entry.config(show="" if client_id_show_var.get() else "*"),
+        ).grid(row=2, column=2, padx=(6, 0))
+
+        ttk.Label(
+            frame,
+            text="通常は空欄で問題ありません。配信者のサブスク・実績バッジ(アイコン)を"
+                 "オーバーレイにも表示したい場合のみ入力してください。"
+                 "OAuthトークンと同じ場所(twitchtokengenerator.com等)で一緒に取得できます。"
+                 "トークンとClient IDは、同じアプリ登録から発行されたものである必要があります。",
+            foreground="gray", font=("", 8), wraplength=440, justify="left",
+        ).grid(row=3, column=0, columnspan=3, sticky="w")
+
+        ttk.Label(frame, text="チャンネル名").grid(row=4, column=0, sticky="w", pady=(10, 4))
         ttk.Entry(frame, textvariable=self.vars["twitch_channel"], width=40).grid(
-            row=2, column=1, columnspan=2, sticky="ew", pady=(10, 4)
+            row=4, column=1, columnspan=2, sticky="ew", pady=(10, 4)
         )
 
         self.twitch_check_result = tk.StringVar(value="")
         check_row = ttk.Frame(frame)
-        check_row.grid(row=3, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        check_row.grid(row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Button(check_row, text="接続確認", command=self._check_twitch).pack(side="left")
         ttk.Label(check_row, textvariable=self.twitch_check_result).pack(side="left", padx=8)
 
@@ -241,6 +262,7 @@ class TokenSettingsWindow(tk.Toplevel):
         data = {
             "twitch": {
                 "oauth_token": self.vars["twitch_oauth"].get().strip(),
+                "client_id": self.vars["twitch_client_id"].get().strip(),
                 "channel": self.vars["twitch_channel"].get().strip(),
             },
             "youtube": {

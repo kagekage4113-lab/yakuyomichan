@@ -761,6 +761,28 @@ class OverlayDesignWindow(tk.Toplevel):
 
             self._set_preview_canvas_height(canvas, box_height + 24)
 
+        # 【重要】3行レイアウトのON/OFF切り替え等で、プレビューの高さが
+        # 変わることがある。ウィンドウを開いた瞬間だけでなく、
+        # 操作中にチェックボックスが切り替えられた場合にも、
+        # ウィンドウの高さをその都度追従させることで、
+        # 「保存して閉じる」ボタンが見切れる事故を防ぐ。
+        # (幅は変えず、高さだけを必要な分に合わせて伸縮させる)
+        self._refit_window_height()
+
+    def _refit_window_height(self):
+        """
+        現在の中身に必要な高さを測り直し、ウィンドウの高さをそれに
+        合わせる。既に必要な高さと一致していれば何もしない
+        (無駄なgeometry()呼び出しによるちらつきや、Configure
+        イベントの再発火を避けるため)。横幅はユーザーが手動で
+        広げている場合もあるため変更しない。
+        """
+        self.update_idletasks()
+        required_height = self.winfo_reqheight()
+        if required_height != self.winfo_height():
+            current_width = self.winfo_width()
+            self.geometry(f"{current_width}x{required_height}")
+
     # ---------- フッター ----------
 
     def _build_footer(self):

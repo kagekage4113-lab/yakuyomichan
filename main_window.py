@@ -59,7 +59,7 @@ ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
 APP_NAME = "やく読みちゃん"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 README_PATH = "README_ja.txt"
 
 # アップデート確認先のGitHubリポジトリ("ユーザー名/リポジトリ名")
@@ -927,12 +927,12 @@ class MainWindow(tk.Tk):
         self.console.log("YouTubeの監視を停止しました。")
 
     def _start_watching_twitch(self):
-        def on_comment(username, message, has_emote=False, emotes=None):
+        def on_comment(username, message, has_emote=False, emotes=None, badges=None):
             # twitchioのイベントは別スレッド(asyncioループ)から呼ばれるため、
             # Tkinterウィジェットの操作はself.afterでメインスレッドに戻して行う
             self._safe_after(
                 lambda: self._handle_comment(
-                    "twitch", username, message, has_emote=has_emote, emotes=emotes,
+                    "twitch", username, message, has_emote=has_emote, emotes=emotes, badges=badges,
                 ),
             )
 
@@ -969,7 +969,7 @@ class MainWindow(tk.Tk):
         threading.Thread(target=run_watcher, daemon=True).start()
         self.console.log("YouTubeチャット監視を開始しました。(数秒間隔のポーリング方式です)")
 
-    def _handle_comment(self, platform, username, message, has_emote=False, emotes=None):
+    def _handle_comment(self, platform, username, message, has_emote=False, emotes=None, badges=None):
         """
         1件のコメントを受け取り、判定→翻訳→読み上げ→チャット欄反映まで行う。
 
@@ -981,8 +981,13 @@ class MainWindow(tk.Tk):
           ([{"id":..., "start":..., "end":..., "text":...}, ...])。
           オーバーレイ側で、原文中のエモート部分を実際の画像に
           差し替えるために使う。
+        badges: サブスク・モデレーター等の実績バッジ一覧
+          ([{"set_id":..., "version":..., "image_url":...}, ...])。
+          image_urlはClient-ID未設定/取得失敗時はNoneになる。
+          オーバーレイ側で、ユーザー名の隣にアイコンとして表示する。
         """
         emotes = emotes or []
+        badges = badges or []
         if self.selected_style_id is None:
             self.console.log("ボイスが選択されていません。VOICEVOXメニューから選んでください。", level="error")
             return
@@ -1071,7 +1076,9 @@ class MainWindow(tk.Tk):
                     speech_text, style_id=self.selected_style_id, params=voice_params, blocking=False,
                 )
 
-            overlay_server.push_comment(platform, username, original_for_display, translated, emotes=emotes)
+            overlay_server.push_comment(
+                platform, username, original_for_display, translated, emotes=emotes, badges=badges,
+            )
             chat_logger.log_comment(platform, username, original_for_display, translated)
 
             self._safe_after(lambda: self.add_chat_row(platform, username, original_for_display, translated))

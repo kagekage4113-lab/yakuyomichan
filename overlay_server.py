@@ -45,7 +45,7 @@ _comments = []  # {"platform":..., "user":..., "original":..., "translated":...,
 _display_mode = "translated"  # "off" / "translated" / "both"
 
 
-def push_comment(platform: str, user: str, original: str, translated: str, emotes=None):
+def push_comment(platform: str, user: str, original: str, translated: str, emotes=None, badges=None):
     """
     メイン画面側から、新しいコメントが処理されるたびに呼び出す。
 
@@ -55,6 +55,11 @@ def push_comment(platform: str, user: str, original: str, translated: str, emote
       original(原文)の中の該当位置を、ブラウザ側で実際のエモート
       画像に差し替えるために使う。YouTube等、対応する概念が無い
       プラットフォームからは None(=空リスト扱い)で呼ばれる。
+    badges: サブスク・モデレーター等の実績バッジ一覧
+      ([{"set_id":..., "version":..., "image_url":...}, ...])。
+      image_urlがNoneのバッジ(Client-ID未設定時など)は、
+      ブラウザ側で自然に無視される。ユーザー名の隣に、
+      常時(設定のON/OFFなしで)表示する。
     """
     with _state_lock:
         _comments.append({
@@ -63,6 +68,7 @@ def push_comment(platform: str, user: str, original: str, translated: str, emote
             "original": original,
             "translated": translated,
             "emotes": emotes or [],
+            "badges": badges or [],
             "ts": time.time(),
         })
         # 増えすぎないよう、直近の分だけ保持する
@@ -128,6 +134,19 @@ OVERLAY_HTML = """
           line.className = "chat-line";
 
           const emotes = c.emotes || [];
+          const badges = c.badges || [];
+
+          // Twitchのサブスク・モデレーター等のバッジは、実際のチャット欄と
+          // 同じ感覚で使えるよう、常時(ON/OFFの設定なしで)表示する。
+          // image_urlが無いバッジ(Client-ID未設定/取得失敗時)は、
+          // 画像を出しようがないので静かにスキップする。
+          const badgesHtml = badges
+            .filter(b => b.image_url)
+            .map(b => `<img class="chat-badge" src="${b.image_url}" alt="${escapeHtml(b.set_id || '')}" `
+                    + `title="${escapeHtml(b.set_id || '')}" `
+                    + `style="height:1.1em;vertical-align:middle;margin-right:3px;">`)
+            .join("");
+          const userHtml = badgesHtml + escapeHtml(c.user);
 
           // 【重要】main_window.py側で、エモートを含むコメントは
           // そもそも翻訳を挟まない設計にしている(翻訳するとエモート名が
@@ -152,7 +171,7 @@ OVERLAY_HTML = """
           if (data.stacked_layout) {
             // 3行レイアウト: ユーザー名 / コメント本文(原文) / 翻訳文(あれば)
             // を、それぞれ独立した行として縦に並べる。
-            html = `<div class="chat-user-line">${escapeHtml(c.user)}</div>`;
+            html = `<div class="chat-user-line">${userHtml}</div>`;
             if (hasOriginal) {
               html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;
               html += `<div class="chat-translated">${translatedHtml}</div>`;
@@ -161,7 +180,7 @@ OVERLAY_HTML = """
             }
           } else {
             // 従来のレイアウト: ユーザー名と本文が同じ行に表示される
-            html = `<span class="chat-user">${escapeHtml(c.user)}</span>${translatedHtml}`;
+            html = `<span class="chat-user">${userHtml}</span>${translatedHtml}`;
             if (hasOriginal) {
               // 原文側は、実際の文字位置に沿って正確にエモート画像を差し込める
               html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;

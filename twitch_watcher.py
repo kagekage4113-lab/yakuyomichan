@@ -23,6 +23,8 @@ python twitch_watcher.py
 import json
 import os
 
+import twitch_badges
+
 try:
     import twitchio
     TWITCHIO_AVAILABLE = True
@@ -33,6 +35,29 @@ TOKEN_CONFIG_PATH = "token_config.json"
 
 _running_bots = []  # 停止処理のために、起動中のBotインスタンスを覚えておく
 _is_stopped = {"value": False}  # bot.close()が効かない場合の保険用フラグ
+
+
+def _parse_badges_tag(badges_tag):
+    """
+    Twitch IRCの badges タグを解析する。
+
+    タグの形式(例): "subscriber/12,premium/1"
+    → "subscriber" バッジのバージョン "12"(=12ヶ月継続、等)、
+       "premium" バッジのバージョン "1"、を装着している
+
+    戻り値: [("subscriber", "12"), ("premium", "1")] のような
+    (set_id, version) のタプルのリスト。バッジが無ければ空リスト。
+    """
+    if not badges_tag:
+        return []
+
+    badges = []
+    for part in badges_tag.split(","):
+        if "/" not in part:
+            continue
+        set_id, version = part.split("/", 1)
+        badges.append((set_id, version))
+    return badges
 
 
 def _parse_emotes_tag(emotes_tag, message_text):
@@ -81,6 +106,9 @@ def load_token_config():
     """
     token_config.json からTwitchの接続情報を読み込む。
     無い場合はNoneを返す(GUI側でトークン未設定の案内を出す想定)。
+
+    client_id は任意項目(バッジ表示機能を使う場合のみ必要)。
+    未設定でも監視自体は問題なく開始できる(空文字列になるだけ)。
     """
     if not os.path.exists(TOKEN_CONFIG_PATH):
         return None
@@ -89,6 +117,7 @@ def load_token_config():
     twitch_conf = data.get("twitch", {})
     if not twitch_conf.get("oauth_token") or not twitch_conf.get("channel"):
         return None
+    twitch_conf.setdefault("client_id", "")
     return twitch_conf
 
 
@@ -103,15 +132,17 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
     より単純な twitchio.Client を直接継承する形に変更している。
 
     on_comment: コメントを受け取るたびに呼ばれるコールバック。
-      on_comment(username: str, message: str, has_emote: bool, emotes: list) の
-      形で呼ばれる。
+      on_comment(username: str, message: str, has_emote: bool, emotes: list,
+                 badges: list) の形で呼ばれる。
       has_emote は、メッセージ内にTwitchエモート(スタンプ)が
       1つでも含まれていれば True になる。
       emotes は _parse_emotes_tag() が返す、位置情報つきのリスト
       (オーバーレイ側で実際の画像に差し替えるために使う)。
+      badges は [{"set_id":..., "version":..., "image_url":...}, ...] の
+      リスト(image_urlは、Client-IDが未設定/取得失敗時はNoneになる)。
     """
 
-    def __init__(self, oauth_token, channel, on_comment):
+    def __init__(self, oauth_token, channel, on_comment, client_id=""):
         if not TWITCHIO_AVAILABLE:
             raise RuntimeError(
                 "twitchioがインストールされていません。"
@@ -119,9 +150,29 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
             )
         super().__init__(token=oauth_token, initial_channels=[channel])
         self.on_comment = on_comment
+        self.oauth_token = oauth_token
+        self.channel = channel
+        self.client_id = client_id
+        self.badge_map = {}  # (set_id, version) -> image_url
 
     async def event_ready(self):
         print(f"[TwitchWatcher] 接続しました: {self.nick}")
+
+        # 【重要】バッジ画像の取得はネットワークAPI呼び出しを伴うため、
+        # メッセージが来るたびではなく、接続完了時に1回だけ行い、
+        # 結果をメモリ上に保持しておく(twitch_badges.py側でも
+        # プロセス内キャッシュしているため、実質的な二重キャッシュだが、
+        # 毎コメントごとの辞書アクセスを避ける意味でここにも持たせている)。
+        # Client-IDが未設定、または取得に失敗した場合は、
+        # 空の辞書のまま(=バッジ画像なし)で動作を継続する。
+        if self.client_id:
+            try:
+                self.badge_map = twitch_badges.load_badge_map(
+                    self.channel, self.oauth_token, self.client_id,
+                )
+                print(f"[TwitchWatcher] バッジ情報を{len(self.badge_map)}件取得しました。")
+            except Exception as e:
+                print(f"[TwitchWatcher] バッジ情報の取得に失敗しました(表示のみ諦めます): {e}")
 
     async def event_message(self, message):
         # Bot自身の発言は無視する(無限ループ防止)
@@ -151,14 +202,25 @@ class TwitchWatcher(twitchio.Client if TWITCHIO_AVAILABLE else object):
         emotes = _parse_emotes_tag(emotes_tag, content)
         has_emote = bool(emotes)
 
+        # バッジ(サブスク・モデレーター等の実績アイコン)も、
+        # emotesと同様にIRCタグから取得する。画像URLへの解決は
+        # 接続時に読み込んだ self.badge_map を使う(Client-ID未設定/
+        # 取得失敗時は空のままなので、image_urlは常にNoneになり、
+        # オーバーレイ側は「画像なし」として静かに無視する)。
+        badges_tag = tags.get("badges", "") if isinstance(tags, dict) else ""
+        badges = [
+            {"set_id": set_id, "version": version, "image_url": self.badge_map.get((set_id, version))}
+            for set_id, version in _parse_badges_tag(badges_tag)
+        ]
+
         if self.on_comment:
-            self.on_comment(username, content, has_emote, emotes)
+            self.on_comment(username, content, has_emote, emotes, badges)
 
 
 def start_watching(on_comment):
     """
     設定ファイルの情報を使って、Twitch監視を開始する。
-    on_comment(username, message, has_emote, emotes) が、
+    on_comment(username, message, has_emote, emotes, badges) が、
     コメントを受け取るたびに呼ばれる。
 
     戻り値: 起動できたかどうか(bool)。
@@ -179,6 +241,7 @@ def start_watching(on_comment):
         oauth_token=config["oauth_token"],
         channel=config["channel"],
         on_comment=on_comment,
+        client_id=config.get("client_id", ""),
     )
     _running_bots.append(bot)
     bot.run()  # ブロッキングするので、呼び出し元は別スレッドで実行すること
@@ -210,8 +273,9 @@ def stop_watching():
 
 
 if __name__ == "__main__":
-    def print_comment(username, message, has_emote, emotes):
-        mark = f"[エモート{len(emotes)}個]" if has_emote else ""
-        print(f"[{username}] {message} {mark}")
+    def print_comment(username, message, has_emote, emotes, badges):
+        emote_mark = f"[エモート{len(emotes)}個]" if has_emote else ""
+        badge_mark = f"[バッジ{len(badges)}個]" if badges else ""
+        print(f"[{username}] {message} {emote_mark}{badge_mark}")
 
     start_watching(print_comment)
