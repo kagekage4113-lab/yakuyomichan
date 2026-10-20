@@ -1,251 +1,151 @@
-====================================================
- Multilingual Chat Translation & Text-to-Speech Bot
-====================================================
+==============================================================
+ YakuYomi-chan  (Version 1.6.0)
+ A free, open-source Windows app that translates and reads
+ live-stream chat aloud
+==============================================================
 
-A tool that translates stream chat comments -- regardless of
-language -- into natural Japanese, and reads them aloud using
-VOICEVOX voices.
+■ What is this?
 
-It aims for more natural, human-like translation than Twitch's
-built-in machine translation, using only a local LLM. No cloud
-API is used, so there are no monthly fees.
+  It reads live chat from Twitch and YouTube, translates foreign-language
+  comments into Japanese, and reads them aloud with VOICEVOX.
+  It also provides a subtitle overlay you can show in OBS.
 
-(日本語版は README_ja.txt をご覧ください)
+  - Translation runs on a local AI (LM Studio + Gemma) on your own PC.
+    Chat comments are never sent to an external translation service.
+  - It also works without translation (read-aloud only).
+
 
+■ Requirements
+
+  1. VOICEVOX   ... for speech (free)
+  2. LM Studio  ... for translation (free; only if you use translation)
+  3. A stream token ... Twitch or YouTube
 
-----------------------------------------------------
- Features
-----------------------------------------------------
+  Installers for VOICEVOX and LM Studio are bundled in the
+  "optional_installers" folder inside the app folder.
+  See the Help menu in the app for setup guides.
 
-- Chat monitoring
-  Supports Twitch, YouTube, or both platforms simultaneously
 
-- AI auto-translation
-  A local LLM (Gemma4) translates comments into natural
-  Japanese, regardless of the source language
+■ Quick start
 
-- Text-to-speech
-  Reads translated text aloud using VOICEVOX voices
+  1. Launch VOICEVOX.
+  2. (For translation) Load a model in LM Studio and start its local server.
+  3. Open "配信 (Stream)" menu -> "トークン設定 (Token settings)" and enter
+     your Twitch channel name and token (or YouTube info).
+  4. Choose the platform on the main screen (Twitch / YouTube / both).
+  5. Press "▶ 起動 (Start)" to begin monitoring chat and reading aloud.
 
-- OBS overlay
-  Displays translated text (optionally with the original) as a
-  transparent overlay on your stream
+  The "● VOICEVOX" and "● LM Studio" indicators at the bottom show whether
+  each one is reachable. A tutorial is shown on first launch.
 
-- Voice selection
-  Browse all VOICEVOX characters, filter by gender/genre,
-  preview voices, and save favorites
+  Note: the app's interface is in Japanese.
 
-- Advanced settings
-  Adjust speed, pitch, intonation, and volume with sliders
 
-- Hotkey
-  Toggle mute at any time with a customizable key combination
+■ Main features
 
-- Chat log
-  Automatically saves every processed comment, organized by date
+  [Translation]
+  - Only foreign-language comments are translated into Japanese.
+  - Toggle with the "翻訳: ON / OFF" button at the top of the main screen.
+    When OFF, no LM Studio is needed and it works as a read-aloud tool.
 
+  [Speech (VOICEVOX)]
+  - Pick a character with "ボイス選択 (Voice select)".
+  - Adjust speed, pitch, intonation, etc. in "詳細設定 (Advanced)".
+  - Set a mute-toggle hotkey (default: Ctrl+Shift+M).
+  - Platform choice and volume are remembered between launches.
 
-----------------------------------------------------
- Installation
-----------------------------------------------------
+  [Speech filters (in Advanced settings)]
+  - Do not read URLs
+  - Do not read emoji / kaomoji / Twitch emotes
+  - Announce incoming emotes with a phrase (text is editable)
+  - Maximum characters read aloud (cut text ends with "(以下略)")
+  * Filters affect audio only. The chat log and the overlay always show
+    the full text.
+  * Comments containing emotes are not translated; the original is shown.
+  * Kaomoji containing kanji (e.g. ( *´艸｀) ) may be partly read aloud.
 
-Run the included Install.exe. Follow the wizard to install
-the main application.
+  [OBS overlay (subtitles)]
+  - Add an OBS "Browser Source" with this URL:
+      http://127.0.0.1:8765/overlay
+    (Copy it from "表示 (View)" -> "オーバーレイURLをコピー".)
+  - Choose a subtitle mode in the View menu:
+      Off / Translation only / Original + translation
+  - "オーバーレイのデザインを設定" lets you change font, colors, number
+    of lines, and more:
+      - 3-column layout (user / comment / translation)
+      - Show or hide the original text
+      - Twitch emotes as images
+      - Twitch badges (requires a Client ID)
+      - Twitch clip thumbnails (requires a Client ID)
+        - The clip URL text can be hidden
+  - If changes do not appear, refresh the cache of the OBS Browser Source.
 
-After installation, a folder named "optional_installers" will
-be created inside the install folder. It contains:
+  [Chat log]
+  - The main screen lists user / original / read-aloud text.
+  - It follows the newest line (stays put while you scroll up).
+  - "ファイル (File)" -> "ログを開く" opens the saved log folder.
 
-  - VoicevoxSetup.exe   -> Run to install VOICEVOX
-  - LMStudioSetup.exe   -> Run to install LM Studio
-  - download_model.bat  -> Run after installing LM Studio to
-                           download the translation model (Gemma4)
+  [Other]
+  - "ファイル" -> "自動起動設定" configures auto-launch of VOICEVOX / LM Studio.
+  - "ヘルプ (Help)" -> "アップデートを確認" checks for a new version.
 
-Note: VOICEVOX and LM Studio are separate applications required
-to run the main app. Each will take several minutes to tens of
-minutes to download, depending on your connection speed.
 
-Note: If you already have VOICEVOX or LM Studio installed, you
-can skip the above steps.
+■ Twitch badges and clip thumbnails (optional)
 
+  These use the Twitch API and need a "Client ID". Enter it in
+  "配信" -> "トークン設定" -> "Client ID (任意)".
 
-----------------------------------------------------
- What to do on first launch
-----------------------------------------------------
+  - Use the Client ID from the SAME app registration that issued your token.
+    A mismatched pair will fail.
+  - If it is empty or fails, only badges/thumbnails are missing;
+    translation and speech are not affected.
 
-When you launch the app for the first time, a short tutorial
-will appear. Please make sure to set up the following three
-items.
 
+■ Settings files
 
-[1] Choose a platform
+  Settings are saved next to the exe. Open them from
+  "ファイル" -> "設定フォルダを開く".
 
-  Select Twitch / YouTube / Both from the dropdown in the
-  top-left of the main window.
+    token_config.json     ... tokens, channel names
+    app_settings.json     ... platform, volume
+    voice_params.json     ... speech settings and filters
+    overlay_design.json   ... overlay design
+    hotkey_config.json    ... hotkey
+    selected_voice.json   ... selected voice
+    logs\                 ... chat logs
 
+  * token_config.json contains credentials. Never share it or show it
+    on stream.
 
-[2] Configure tokens
 
-  Go to "Stream" menu -> "Token Settings" and enter your
-  Twitch and/or YouTube credentials.
+■ Updating / uninstalling
 
-  For Twitch:
+  - Update: just run the newer installer; it upgrades in place and keeps
+    your settings.
+  - Uninstall: Windows Settings -> Apps.
 
-    - OAuth token
-      Get one with "chat:read" scope from a service like
-      https://twitchtokengenerator.com
 
-    - Channel name
-      Your Twitch channel name
+■ Troubleshooting
 
+  - "Could not start Twitch monitoring"
+      -> Check that the channel name and token are entered.
+  - No speech
+      -> Check that VOICEVOX is running (see the indicator at the bottom).
+  - No translation
+      -> Check that the LM Studio server is running with a model loaded,
+         and that translation is "ON".
+  - Overlay not updating
+      -> Refresh the OBS Browser Source cache.
 
-  For YouTube:
+  If it is still unresolved, please open an issue on GitHub.
 
-    Getting YouTube chat working requires an API key from
-    Google Cloud Console. It's free and takes about 5 minutes.
 
-    1. Go to https://console.cloud.google.com/ and sign in
-       with your Google account
+■ Links and licenses
 
-    2. Click "Select a project" at the top -> "New Project"
-       and create one (any name works)
+  GitHub: https://github.com/kagekage4113-lab/multilingual-chat-tts-bot
 
-    3. Search for "YouTube Data API v3" in the search bar and
-       open its page
+  When using VOICEVOX voices, follow each character's terms of use and
+  credit "VOICEVOX:<character name>" on streams. LM Studio and the AI
+  model you use are subject to their own licenses.
 
-    4. Click "Enable"
-       Note: If you skip this, the next step may show
-       "No APIs selected" with nothing to choose from.
-
-    5. In the left menu, go to "Credentials" ->
-       "+ Create Credentials" -> "API Key"
-
-    6. Under "API restrictions," select "YouTube Data API v3"
-       Note: If it doesn't appear, double-check step 4.
-       Note: If it still doesn't work, you can select
-       "Don't restrict key" instead -- fine for personal use.
-
-    7. Copy the resulting key (starts with "AIzaSy...") and
-       paste it into the app's token settings screen.
-
-    Your stream's VIDEO_ID can be found in the URL of your
-    YouTube Studio livestream management page.
-
-    Example:
-    https://studio.youtube.com/video/[THIS IS THE VIDEO_ID]/livestreaming
-
-    It's the string right after "/video/", up to the next "/"
-    (about 11 alphanumeric characters).
-
-    Note: You don't need a new API key for every stream. The
-    VIDEO_ID changes with every new stream, so update it each time.
-
-
-[3] Check auto-launch settings
-
-  Go to "File" menu -> "Auto-Launch Settings" to configure
-  whether VOICEVOX and LM Studio should start automatically
-  alongside this app.
-
-  The executable locations are usually as follows (replace
-  [USERNAME] with your actual Windows username):
-
-    LM Studio : C:\Program Files\LM Studio\LM Studio.exe
-    VOICEVOX  : C:\Users\[USERNAME]\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe
-
-  If you can't find them, right-click the desktop or Start Menu
-  shortcut and select "Open file location."
-
-  Note: LM Studio may not automatically load a model or start
-  its server just from launching. If so, enable LM Studio's
-  "start server automatically" option, or load/start it manually.
-
-
-----------------------------------------------------
- Using it with OBS
-----------------------------------------------------
-
-1. When you launch the app, an overlay server starts
-   automatically.
-
-2. In OBS, add a "Browser" source.
-
-3. Enter this URL:
-   http://127.0.0.1:8765/overlay
-   (You can also copy this from "View" -> "Copy Overlay URL"
-   in the app menu.)
-
-4. The background is transparent by default.
-
-You can toggle what the overlay displays -- "No subtitles,"
-"Translation only," or "Original + translation" -- from the
-"View" menu.
-
-You can also customize font size, colors, and background
-transparency from "View" -> "Overlay Design Settings."
-
-
-----------------------------------------------------
- FAQ
-----------------------------------------------------
-
-Q. I don't hear any audio at all.
-
-A. Check that VOICEVOX is running, the volume slider in the
-  main window isn't at 0, and mute (the speaker icon) isn't
-  enabled.
-
-
-Q. Comments are read out in the original language instead of
-  being translated.
-
-A. Check that LM Studio is running and the correct model is
-  loaded. The "LM Studio" indicator at the top of the main
-  window turns green once the model is loaded. If it's yellow
-  or red, start the model in LM Studio.
-
-
-Q. YouTube chat isn't responding.
-
-A. You need to actually be live-streaming before the YouTube
-  chat ID can be retrieved. Also, unlike Twitch, YouTube uses
-  polling (checking every few seconds), so responses will be
-  somewhat slower.
-
-
-Q. I only want to use VOICEVOX. Do I need LM Studio?
-
-A. No. Turn off the "Translation: ON/OFF" button on the main
-  screen, and the app will read comments aloud as-is, in any
-  language, without translation.
-
-
-----------------------------------------------------
- About the Voice Assets
-----------------------------------------------------
-
-Some of the default voice samples use audio from the free
-character "Tsukuyomi-chan."
-
-  Tsukuyomi-chan Corpus:
-  https://tyc.rei-yumesaki.net/material/corpus/
-
-  Official Tsukuyomi-chan site:
-  https://tyc.rei-yumesaki.net/
-
-Tsukuyomi-chan's assets are used in accordance with the
-Tsukuyomi-chan Character License.
-
-
-----------------------------------------------------
- License & Notes
-----------------------------------------------------
-
-- This tool is released as free, open-source software. It is
-  not intended for commercial distribution or for-profit use.
-
-- Never share or publish configuration files containing
-  personal information, such as token_config.json, which holds
-  your Twitch/YouTube API tokens.
-
-- When using VOICEVOX, please follow the license terms of each
-  individual character.
+==============================================================
