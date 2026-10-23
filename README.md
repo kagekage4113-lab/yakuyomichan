@@ -1,48 +1,209 @@
-# Multilingual Chat Translation & Text-to-Speech Bot
+# 多言語チャット翻訳読み上げボット
 
-Translates multilingual stream chat into Japanese and reads it aloud with VOICEVOX. Runs entirely on a local LLM — no cloud API, no monthly fees.
+配信のチャットコメントを、何語で書かれていても自然な日本語に翻訳し、VOICEVOXの声で読み上げるツールです。
 
-More natural and human-like than Twitch's built-in machine translation.
+Twitchの機械的な自動翻訳より人間味のある翻訳を、ローカルLLMだけで実現します。クラウドAPIは一切使わないので、月額費用もかかりません。
 
-日本語の詳しい説明は [README_ja.txt](README_ja.txt) をご覧ください。
+---
 
+## できること
 
-## Features
+- **チャット監視**：Twitch / YouTube / 両方同時、いずれにも対応
+- **AI自動翻訳**：何語で書かれていても、ローカルLLM(Gemma4)が自然な日本語に翻訳
+- **声で読み上げ**：VOICEVOXの声で、翻訳結果をそのまま読み上げ
+- **OBSオーバーレイ**：翻訳結果(原文つきも可)を、配信画面に透過表示
+- **ボイス選択**：VOICEVOXの全キャラクターを、性別・ジャンルで絞り込んで選択。試聴・お気に入り登録も可能
+- **詳細設定**：話速・音高・抑揚・音量をスライダーで調整
+- **ホットキー**：好きなキーの組み合わせで、いつでもミュートを切り替え
+- **チャットログ**：処理した全コメントを、日付ごとに自動保存
 
-- **Chat monitoring** — Twitch, YouTube, or both at the same time
-- **AI translation** — A local LLM (Gemma4) translates any language into natural Japanese
-- **Text-to-speech** — Reads translated text aloud with VOICEVOX voices
-- **OBS overlay** — Transparent overlay showing translations (with original text, optionally)
-- **Voice picker** — Browse VOICEVOX characters by gender/genre, preview, save favorites
-- **Fine-tuned controls** — Speed, pitch, intonation, volume sliders
-- **Hotkey** — Toggle mute with a custom key combination
-- **Chat log** — All processed comments saved automatically, organized by date
+会話AIのような複雑な人格機能はあえて搭載していません。「翻訳して読み上げるだけ」に特化することで、軽量で安定した動作を実現しています。
 
-This tool deliberately avoids complex conversational-AI features. By focusing only on "translate and read aloud," it stays lightweight and stable.
+---
 
+## 必要なもの
 
-## Download
+このツールを動かすには、以下のソフトを別途用意する必要があります。
 
-Get the latest installer from the [Releases](../../releases) page.
+| ソフト | 役割 | 入手先 |
+|---|---|---|
+| **LM Studio** | ローカルLLM(Gemma4)を動かすためのアプリ | https://lmstudio.ai/ |
+| **VOICEVOX** | 音声合成エンジン | https://voicevox.hiroshiba.jp/ |
 
-Run `Install.exe` to install the main application. VOICEVOX and LM Studio (required for translation) are bundled as separate installers inside the `optional_installers` folder after setup — see `install_guide.txt` there for step-by-step instructions.
+推奨スペックの目安として、GPU(VRAM 4GB以上)があると快適に動作します。VRAMが無い環境でも動作しますが、翻訳の応答速度が遅くなります。
 
-If you only want text-to-speech (no translation), you can skip installing LM Studio entirely and just use VOICEVOX with this app.
+### 使用モデルについて
 
+翻訳には Google の **Gemma4 E2B**(軽量版)を推奨しています。LM Studioの検索画面から `google/gemma-4-e2b` を検索してダウンロードしてください。
 
-## Documentation
+---
 
-- [README_ja.txt](README_ja.txt) — Full Japanese guide (installation, token setup, OBS integration, FAQ)
-- [README_en.txt](README_en.txt) — Full English guide
+## セットアップ手順
 
+### 1. Pythonライブラリのインストール
 
-## About the Voice Assets
+```
+pip install requests flask pillow twitchio keyboard
+```
 
-Some default voice samples use audio from the free character "Tsukuyomi-chan" ([official site](https://tyc.rei-yumesaki.net/)), used under the Tsukuyomi-chan Character License.
+### 2. LM Studioの準備
 
+1. LM Studioを起動し、`google/gemma-4-e2b` をダウンロード
+2. 左メニューの「Local Server」タブを開く
+3. モデルをロードし、「Start Server」を押す(`http://127.0.0.1:1234` で待ち受け開始)
 
-## License
+### 3. VOICEVOXの準備
 
-Released as free, open-source software. Not intended for commercial distribution.
+1. VOICEVOXを起動する(エンジンが `http://127.0.0.1:50021` で自動的に待ち受けます)
 
-Never share configuration files containing personal tokens (e.g. `token_config.json`).
+### 4. VOICEVOXキャラクター情報の同期(初回のみ)
+
+VOICEVOXを起動した状態で、以下を1回だけ実行してください。キャラクター一覧とアイコンをローカルに保存します。
+
+```
+python sync_voicevox_characters.py
+python fill_character_meta.py
+```
+
+### 5. トークンの設定
+
+アプリを起動後、メニューの「配信」→「トークン設定」から、Twitch・YouTubeそれぞれの認証情報を入力してください。
+
+#### Twitchの場合
+
+- **OAuthトークン**：`https://twitchtokengenerator.com` 等で、`chat:read` 権限のトークンを取得
+- **チャンネル名**：あなたのTwitchチャンネル名
+
+#### YouTubeの場合
+
+YouTubeのチャットを取得するには、Google Cloud ConsoleでAPIキーを取得する必要があります。難しそうに見えますが、無料で、5分程度あれば完了します。
+
+1. **`https://console.cloud.google.com/`にアクセスし、Googleアカウントでログイン**
+2. 画面上部の「プロジェクトを選択」→「新しいプロジェクト」を作成する(名前は何でもよい。例: `chat-bot`)
+3. 作成したプロジェクトを選択した状態で、検索バーに **「YouTube Data API v3」** と入力し、そのページを開く
+4. **「有効にする」ボタンを押す**
+   - ここが重要です。この有効化を先に済ませておかないと、次の手順でAPIキーに制限をかけようとした時に「API が選択されていません」のような表示になり、選択肢が出てこない場合があります
+5. 左メニューの「認証情報」→「+ 認証情報を作成」→「APIキー」を選択
+6. **「API の制限」で、先ほど有効化した「YouTube Data API v3」を選択する**
+   - もし選択肢に出てこない場合は、手順4の有効化が完了しているか確認してください
+   - それでも解決しない場合は、ひとまず「キーを制限しない」を選んで、APIキー自体を先に発行してしまっても問題ありません(個人利用の範囲であれば実用上支障はありません)
+7. 発行された `AIzaSy...` から始まる文字列をコピーし、アプリのトークン設定画面に入力する
+
+**配信のVIDEO_ID** は、YouTube Studioの配信管理画面のURLから取得できます。
+
+```
+https://studio.youtube.com/video/【ここがVIDEO_ID】/livestreaming?c=...
+```
+
+`/video/` の直後、次の `/` までの文字列(11文字程度の英数字)がVIDEO_IDです。
+
+> **補足**：YouTube Data APIは、配信ごとに個別のAPIキーを取得し直す必要はありません。一度取得したAPIキーは、あなたのGoogleアカウントに紐づく認証情報として使い回せます。VIDEO_IDだけは配信のたびに変わるので、新しい配信を始めるたびに設定し直してください。
+
+### 6. アプリの起動
+
+以下のいずれかの方法で起動できます。
+
+**方法A: batファイルをダブルクリック(おすすめ)**
+
+`start_app.bat` をダブルクリックするだけで起動します。デスクトップに置きたい場合は、`start_app.bat` を右クリックして「ショートカットの作成」を選び、できたショートカットをデスクトップに移動してください。
+
+**方法B: コマンドから起動**
+
+```
+python main_window.py
+```
+
+これで準備完了です。プラットフォームを選んで「起動」ボタンを押せば、チャット監視が始まります。
+
+### 7. (任意)VOICEVOX / LM Studioの自動起動設定
+
+毎回VOICEVOX・LM Studioを手動で起動するのが面倒な場合は、メニューの「ファイル」→「自動起動設定」から、このアプリの起動と同時に自動で立ち上げるよう設定できます。
+
+トグルをONにした上で、それぞれの実行ファイル(.exe)の場所を指定してください。実行ファイルの場所は環境によって異なりますが、一般的には以下のような場所にあります(`【ユーザー名】` の部分は、あなたのWindowsのユーザー名に置き換えてください)。
+
+```
+LM Studio  : C:\Program Files\LM Studio\LM Studio.exe
+VOICEVOX   : C:\Users\【ユーザー名】\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe
+```
+
+見つからない場合は、デスクトップやスタートメニューのショートカットを右クリックし、「ファイルの場所を開く」から実際の実行ファイルを確認できます。
+
+> **注意**：LM Studioは起動しても、モデルのロードとLocal Serverの起動が自動では行われない場合があります。その場合は、LM Studio側の設定で「起動時に自動でサーバーを開始する」オプションを有効にしておくか、手動でロード・起動を行ってください。
+
+---
+
+## OBSでの使い方
+
+1. アプリを起動すると、自動的にオーバーレイサーバーが立ち上がります
+2. OBSで「ブラウザ」ソースを追加
+3. URLに `http://127.0.0.1:8765/overlay` を入力(メニューの「表示」→「オーバーレイURLをコピー」でも取得できます)
+4. 背景は自動的に透過されます
+
+字幕の表示内容は、メニューの「表示」から「字幕なし」「翻訳のみ」「原文+翻訳」の3パターンを切り替えられます。
+
+---
+
+## よくある質問
+
+**Q. 音声が全然聞こえません**
+A. VOICEVOXが起動しているか、メイン画面の音量ゲージが0になっていないか、ミュート(スピーカーアイコン)がオンになっていないか確認してください。
+
+**Q. 翻訳されず英語のまま読まれます**
+A. LM Studioが起動しているか、正しいモデルがロードされているか確認してください。LM Studioに接続できない場合、原文がそのまま読み上げられる仕様になっています(読み上げ自体が止まらないようにするための設計です)。
+
+**Q. YouTubeのチャットが反応しません**
+A. 配信を実際に開始した状態でないと、YouTube側のチャットIDが取得できません。また、YouTube Data APIはリアルタイムではなく数秒間隔のポーリング方式のため、Twitchより反応がやや遅くなります。
+
+---
+
+## 今後の展望
+
+- インストーラーによる、VOICEVOX / LM Studioを含めた一括セットアップ対応
+- Edge-TTSを利用した、日本語→外国語(英語・中国語・韓国語・欧州言語等)の同時通訳機能。配信者自身の発言を、外国語話者にも届けられるようにする(現状の「外国語→日本語」と合わせて、双方向対応を目指す)
+- チャットオーバーレイの配色・フォントをカスタマイズできる機能
+
+---
+
+## 使用している音声素材について
+
+デフォルトのボイスサンプルの一部には、フリー素材キャラクター「つくよみちゃん」の音声を利用しています。
+
+- つくよみちゃんコーパス: https://tyc.rei-yumesaki.net/material/corpus/
+- つくよみちゃん公式サイト: https://tyc.rei-yumesaki.net/
+
+つくよみちゃんの素材は、つくよみちゃんキャラクターライセンスに基づいて利用しています。
+
+---
+
+## ライセンス・注意事項
+
+- 本ツールはオープンソースとして無償で公開しています。商用配布・利益目的の使用は想定していません。
+- Twitch・YouTubeのAPIトークンや、その他の個人情報を含む設定ファイル(`token_config.json` 等)は、絶対に公開・共有しないでください。
+- VOICEVOXの利用にあたっては、各キャラクターの利用規約に従ってください。
+
+---
+
+## 技術構成(開発者向け)
+
+| 役割 | 技術 |
+|---|---|
+| GUI | Python (Tkinter) |
+| 翻訳 | Gemma4 (LM Studio経由、OpenAI互換API) |
+| 音声合成 | VOICEVOX (ローカルAPI) |
+| チャット監視 | twitchio (Twitch) / YouTube Data API v3 (YouTube) |
+| オーバーレイ配信 | Flask (ローカルWebサーバー) |
+
+主要ファイルの役割は以下の通りです。
+
+- `main_window.py` : メイン画面
+- `voice_select_window.py` : VOICEVOXキャラクター検索/選択画面
+- `voice_settings_window.py` : 話速・音高等の詳細設定画面
+- `token_settings_window.py` : トークン設定画面
+- `auto_launch.py` / `auto_launch_settings_window.py` : VOICEVOX/LM Studioの自動起動
+- `lang_detect.py` : 日本語判定ロジック(LLM不使用、高速判定)
+- `translator.py` : Gemma4による翻訳処理
+- `voicevox_speak.py` : VOICEVOXでの読み上げ処理
+- `twitch_watcher.py` / `youtube_watcher.py` : チャット監視処理
+- `overlay_server.py` : OBS用オーバーレイサーバー
+- `chat_logger.py` : チャットログの自動保存
+- `start_app.bat` : 起動用バッチファイル

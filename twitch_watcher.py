@@ -24,6 +24,7 @@ import json
 import os
 
 import twitch_badges
+from resource_path import writable_path
 
 try:
     import twitchio
@@ -109,10 +110,21 @@ def load_token_config():
 
     client_id は任意項目(バッジ表示機能を使う場合のみ必要)。
     未設定でも監視自体は問題なく開始できる(空文字列になるだけ)。
+
+    【重要・不具合修正】以前はここで素の相対パス("token_config.json")の
+    まま open() していたため、PyInstallerでビルドしたexeを実行した際に、
+    実際の作業フォルダ(カレントディレクトリ)がexeのあるフォルダと
+    一致しない場合(スタートメニューのショートカット経由での起動等)、
+    token_settings_window.py が writable_path() 経由で保存した場所と
+    ズレてしまい、「トークンを保存したのに見つからない」という不具合に
+    つながっていた(ソースコードから python で直接実行した場合は、
+    作業フォルダがたまたま一致するため、この不具合が表面化しなかった)。
+    他の設定ファイルと同様、writable_path() を使うように統一する。
     """
-    if not os.path.exists(TOKEN_CONFIG_PATH):
+    path = writable_path(TOKEN_CONFIG_PATH)
+    if not os.path.exists(path):
         return None
-    with open(TOKEN_CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     twitch_conf = data.get("twitch", {})
     if not twitch_conf.get("oauth_token") or not twitch_conf.get("channel"):

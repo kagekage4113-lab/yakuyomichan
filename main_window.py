@@ -20,6 +20,7 @@ python main_window.py
 import json
 import os
 import threading
+import time
 
 import requests
 import tkinter as tk
@@ -54,13 +55,17 @@ from auto_launch_settings_window import AutoLaunchSettingsWindow
 from app_settings import load_app_settings, save_app_settings
 from tutorial_window import maybe_show_tutorial
 import auto_launch
+import reading_dictionary
 
 ICON_DIR = "character_icons"
 SELECTED_VOICE_PATH = "selected_voice.json"  # 選んだボイスをアプリ再起動後も覚えておくための保存先
 
 APP_NAME = "やく読みちゃん"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 README_PATH = "README_ja.txt"
+VOICEVOX_BASE_URL = "http://127.0.0.1:50021"  # 読み間違い補正辞書の登録先(VOICEVOXエンジン)
+MIN_OVERLAY_PORT = 1024  # オーバーレイのポート番号に指定できる最小値(これ未満は予約済みの領域)
+RESERVED_PORTS = {50021: "VOICEVOX", 1234: "LM Studio"}  # 当アプリが連携する他ソフトの標準ポート
 
 # アップデート確認先のGitHubリポジトリ("ユーザー名/リポジトリ名")
 GITHUB_REPO = "kagekage4113-lab/multilingual-chat-tts-bot"
@@ -202,6 +207,7 @@ class MainWindow(tk.Tk):
         self._register_hotkeys()
         self._start_overlay_server()
         self._run_auto_launch()
+        self._auto_apply_reading_dictionary()
         self.protocol("WM_DELETE_WINDOW", self._on_exit)
         self.console.log("アプリを起動しました。")
 
@@ -288,8 +294,111 @@ class MainWindow(tk.Tk):
         OBS用のオーバーレイサーバーを、GUIとは別スレッドで起動する。
         アプリの起動と同時に立ち上げておき、常時OBSから読み込める状態にする。
         """
-        threading.Thread(target=overlay_server.run_server, daemon=True).start()
-        self.console.log("オーバーレイサーバーを起動しました: http://127.0.0.1:8765/overlay")
+        self.overlay_port = self._load_overlay_port()
+
+        # 起動前に、ポートが他のアプリに使われていないかを確認する。
+        # 使われていると、サーバーはスレッド内で黙って失敗し、
+        # OBSに何も表示されない原因が分かりにくくなるため、警告を出す。
+        if not overlay_server.is_port_available(self.overlay_port):
+            msg = (
+                f"オーバーレイ用のポート番号 {self.overlay_port} は、他のアプリが使用中のため、"
+                "オーバーレイを起動できませんでした。"
+            )
+            self.console.log(msg, level="error")
+            self.after(500, lambda: self._show_overlay_port_conflict(msg))
+            return
+
+        threading.Thread(
+            target=overlay_server.run_server,
+            kwargs={"port": self.overlay_port},
+            daemon=True,
+        ).start()
+        self.console.log(f"オーバーレイサーバーを起動しました: {self._overlay_url()}")
+
+    def _load_overlay_port(self):
+        """設定(app_settings.json の overlay_port)を読む。無い・不正な値なら初期値を使う"""
+        port = load_app_settings().get("overlay_port", overlay_server.DEFAULT_PORT)
+        if isinstance(port, int) and not isinstance(port, bool) and MIN_OVERLAY_PORT <= port <= 65535:
+            return port
+        return overlay_server.DEFAULT_PORT
+
+    def _overlay_url(self):
+        return f"http://127.0.0.1:{self.overlay_port}/overlay"
+
+    def _show_overlay_port_conflict(self, msg):
+        from tkinter import messagebox
+        messagebox.showwarning(
+            "ポート番号が他のアプリと衝突しています",
+            f"{msg}\n\n"
+            "「表示」メニュー →「オーバーレイのポート番号を変更」で、\n"
+            "別の番号に変更してから、アプリを再起動してください。",
+            parent=self,
+        )
+
+    def _change_overlay_port(self):
+        """
+        オーバーレイのポート番号を変更する(メニュー「表示」から)。
+        実行中のサーバーは止められないため、変更は次回起動時に反映する。
+        変更後の番号が他のアプリと衝突する場合は、警告を出して変更しない。
+        """
+        from tkinter import messagebox, simpledialog
+
+        new_port = simpledialog.askinteger(
+            "オーバーレイのポート番号",
+            f"新しいポート番号を入力してください({MIN_OVERLAY_PORT}〜65535)。\n"
+            f"現在: {self.overlay_port}  /  初期値: {overlay_server.DEFAULT_PORT}\n\n"
+            "変更は、アプリを再起動した後に反映されます。",
+            parent=self,
+            minvalue=MIN_OVERLAY_PORT,
+            maxvalue=65535,
+            initialvalue=self.overlay_port,
+        )
+        if new_port is None:
+            return
+
+        saved_port = self._load_overlay_port()
+        if new_port == saved_port:
+            messagebox.showinfo(
+                "変更なし", f"ポート番号は既に {new_port} に設定されています。", parent=self
+            )
+            return
+
+        if new_port in RESERVED_PORTS:
+            messagebox.showwarning(
+                "ポート番号が衝突します",
+                f"{new_port} は {RESERVED_PORTS[new_port]} の標準ポートです。別の番号を指定してください。",
+                parent=self,
+            )
+            return
+
+        # 現在使用中のポート(このアプリ自身が使っている番号)は、確認の対象外
+        if new_port != self.overlay_port and not overlay_server.is_port_available(new_port):
+            messagebox.showwarning(
+                "ポート番号が衝突します",
+                f"ポート番号 {new_port} は、他のアプリが使用中です。\n別の番号を指定してください。",
+                parent=self,
+            )
+            return
+
+        self._save_app_setting("overlay_port", new_port)
+        self.console.log(f"オーバーレイのポート番号を {new_port} に変更しました(再起動後に反映)。")
+        messagebox.showinfo(
+            "変更しました",
+            f"ポート番号を {new_port} に変更しました。\n\n"
+            "アプリを再起動すると反映されます。\n"
+            f"OBSのブラウザソースのURLも、次のように変更してください。\n\n"
+            f"http://127.0.0.1:{new_port}/overlay",
+            parent=self,
+        )
+
+    def _save_app_setting(self, key, value):
+        """app_settings.json の1項目だけを更新する(保存直前に読み直して、他の設定を壊さない)"""
+        try:
+            settings = load_app_settings()
+            settings[key] = value
+            save_app_settings(settings)
+        except Exception as e:
+            self.console.log(f"設定の保存に失敗しました: {e}", level="error")
 
     # ---------- メニューバー ----------
 
@@ -323,6 +432,9 @@ class MainWindow(tk.Tk):
 
         voicevox_menu = tk.Menu(menubar, tearoff=0)
         voicevox_menu.add_command(label="キャラクター選択", command=self._open_voice_select)
+        voicevox_menu.add_separator()
+        voicevox_menu.add_command(label="読み間違い補正辞書を適用", command=self._apply_reading_dictionary)
+        voicevox_menu.add_command(label="読み間違い補正辞書を取り消す", command=self._remove_reading_dictionary)
         menubar.add_cascade(label="VOICEVOX", menu=voicevox_menu)
 
         view_menu = tk.Menu(menubar, tearoff=0)
@@ -347,6 +459,10 @@ class MainWindow(tk.Tk):
         view_menu.add_command(
             label="オーバーレイのデザインを設定",
             command=self._open_overlay_design,
+        )
+        view_menu.add_command(
+            label="オーバーレイのポート番号を変更",
+            command=self._change_overlay_port,
         )
         menubar.add_cascade(label="表示", menu=view_menu)
 
@@ -406,6 +522,164 @@ class MainWindow(tk.Tk):
             "詳しい使い方はヘルプメニューのREADMEをご覧ください。",
             parent=self,
         )
+
+    def _update_reading_dict_settings(self, **changes):
+        """
+        読み間違い補正辞書に関する設定(適用済みバージョン・自動適用の拒否)を
+        app_settings.json に保存する。保存直前に読み直して、他の設定を
+        上書きしてしまわないようにしている。
+        """
+        try:
+            settings = load_app_settings()
+            settings.update(changes)
+            save_app_settings(settings)
+        except Exception as e:
+            print(f"[reading_dictionary] 設定の保存に失敗しました: {e}")
+
+    def _auto_apply_reading_dictionary(self):
+        """
+        初回起動時(および辞書の内容が更新された最初の起動時)に、
+        読み間違い補正辞書を、利用者の操作なしでVOICEVOXへ登録する。
+
+        【なぜインストーラーではなくアプリ側で行うか】
+        辞書の登録にはVOICEVOXエンジンが「起動している」必要がある。
+        インストーラーの終了時点では、VOICEVOXは入れ終わっても起動して
+        いないため、確実に登録できない。アプリ側なら、VOICEVOXが
+        起動するのを待ってから登録できる。
+
+        ・登録済みバージョンが現行以上なら何もしない。
+        ・利用者が「取り消す」を実行していたら(reading_dict_opt_out)、
+          二度と自動では登録しない(手動の「適用」で再び有効になる)。
+        ・VOICEVOXが一定時間起動しなければ、何もせずに諦める
+          (次回起動時に、改めて試す)。
+        """
+        def task():
+            settings = load_app_settings()
+            if settings.get("reading_dict_opt_out"):
+                return
+            if settings.get("reading_dict_version", 0) >= reading_dictionary.DICTIONARY_VERSION:
+                return
+
+            for _ in range(40):  # 3秒 × 40回 = 最大2分待つ
+                if reading_dictionary.is_engine_up(VOICEVOX_BASE_URL):
+                    break
+                time.sleep(3)
+            else:
+                return
+
+            try:
+                result = reading_dictionary.apply_dictionary(VOICEVOX_BASE_URL)
+            except Exception as e:
+                print(f"[reading_dictionary] 自動適用に失敗しました: {e}")
+                return
+
+            if result["failed"] == 0:
+                self._update_reading_dict_settings(
+                    reading_dict_version=reading_dictionary.DICTIONARY_VERSION
+                )
+            if result["added"]:
+                self._safe_after(lambda: self.console.log(
+                    f"読み間違い補正辞書をVOICEVOXに登録しました({result['added']}語)。"
+                    "取り消しは「VOICEVOX」メニューから行えます。"
+                ))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _apply_reading_dictionary(self):
+        """
+        VOICEVOXが読み間違えやすい語(「激重」「同接」「BAN」等)の
+        補正辞書を、VOICEVOXのユーザー辞書へ登録する(reading_dictionary.py)。
+
+        登録先はVOICEVOX自身の辞書で、VOICEVOXを使う他のアプリにも
+        効いてしまうため、自動では行わず、確認ダイアログを経て実行する。
+        取り消しも「読み間違い補正辞書を取り消す」から行える。
+        """
+        from tkinter import messagebox
+
+        count = len(reading_dictionary.ENTRIES)
+        if not messagebox.askyesno(
+            "読み間違い補正辞書を適用",
+            f"VOICEVOXが読み間違えやすい語({count}語)の読みを、\n"
+            "VOICEVOXのユーザー辞書に登録します。\n\n"
+            "・VOICEVOXが起動している必要があります。\n"
+            "・登録先はVOICEVOX自身の辞書のため、VOICEVOXを使う\n"
+            "  他のアプリにも反映されます。\n"
+            "・既に同じ語を登録している場合は上書きしません。\n"
+            "・「読み間違い補正辞書を取り消す」でいつでも元に戻せます。\n\n"
+            "登録しますか?",
+            parent=self,
+        ):
+            return
+
+        self.console.log("読み間違い補正辞書を適用しています...")
+
+        def task():
+            try:
+                result = reading_dictionary.apply_dictionary(VOICEVOX_BASE_URL)
+            except Exception as e:
+                self._safe_after(lambda: self._show_reading_dict_error(e))
+                return
+            self._safe_after(lambda: self._show_reading_dict_applied(result))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _remove_reading_dictionary(self):
+        """_apply_reading_dictionary で登録した語だけを、VOICEVOXの辞書から削除する"""
+        from tkinter import messagebox
+
+        if not messagebox.askyesno(
+            "読み間違い補正辞書を取り消す",
+            "このアプリが登録した補正辞書の語を、VOICEVOXの辞書から削除します。\n\n"
+            "(ご自分で登録した、読みの異なる語は削除されません)\n\n"
+            "削除しますか?",
+            parent=self,
+        ):
+            return
+
+        self.console.log("読み間違い補正辞書を取り消しています...")
+
+        def task():
+            try:
+                result = reading_dictionary.remove_dictionary(VOICEVOX_BASE_URL)
+            except Exception as e:
+                self._safe_after(lambda: self._show_reading_dict_error(e))
+                return
+            self._safe_after(lambda: self._show_reading_dict_removed(result))
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _show_reading_dict_error(self, error):
+        from tkinter import messagebox
+        self.console.log(f"読み間違い補正辞書の処理に失敗しました: {error}", level="error")
+        messagebox.showerror(
+            "VOICEVOXに接続できません",
+            "VOICEVOXに接続できませんでした。\n\n"
+            "VOICEVOXを起動してから、もう一度お試しください。\n\n"
+            f"{error}",
+            parent=self,
+        )
+
+    def _show_reading_dict_applied(self, result):
+        from tkinter import messagebox
+        msg = (
+            f"登録: {result['added']}語 / 登録済みのため飛ばした語: {result['skipped']}語"
+            + (f" / 失敗: {result['failed']}語" if result["failed"] else "")
+        )
+        self.console.log(f"読み間違い補正辞書を適用しました。{msg}")
+        if result["failed"] == 0:
+            self._update_reading_dict_settings(
+                reading_dict_version=reading_dictionary.DICTIONARY_VERSION,
+                reading_dict_opt_out=False,
+            )
+        messagebox.showinfo("適用しました", msg, parent=self)
+
+    def _show_reading_dict_removed(self, result):
+        from tkinter import messagebox
+        msg = f"削除: {result['removed']}語" + (f" / 失敗: {result['failed']}語" if result["failed"] else "")
+        self.console.log(f"読み間違い補正辞書を取り消しました。{msg}")
+        # 取り消した利用者には、次回起動時に自動で再登録しないようにする
+        self._update_reading_dict_settings(reading_dict_version=0, reading_dict_opt_out=True)
+        messagebox.showinfo("取り消しました", msg, parent=self)
 
     def _check_for_updates(self):
         """
@@ -673,7 +947,7 @@ class MainWindow(tk.Tk):
         self.console.log(f"字幕表示モードを変更しました: {mode}")
 
     def _copy_overlay_url(self):
-        url = "http://127.0.0.1:8765/overlay"
+        url = self._overlay_url()
         self.clipboard_clear()
         self.clipboard_append(url)
         self.console.log(f"オーバーレイURLをコピーしました: {url}")
@@ -927,12 +1201,13 @@ class MainWindow(tk.Tk):
         self.console.log("YouTubeの監視を停止しました。")
 
     def _start_watching_twitch(self):
-        def on_comment(username, message, has_emote=False, emotes=None, badges=None):
+        def on_comment(username, message, has_emote=False, emotes=None, badges=None, clips=None):
             # twitchioのイベントは別スレッド(asyncioループ)から呼ばれるため、
             # Tkinterウィジェットの操作はself.afterでメインスレッドに戻して行う
             self._safe_after(
                 lambda: self._handle_comment(
-                    "twitch", username, message, has_emote=has_emote, emotes=emotes, badges=badges,
+                    "twitch", username, message, has_emote=has_emote,
+                    emotes=emotes, badges=badges, clips=clips,
                 ),
             )
 
@@ -969,7 +1244,8 @@ class MainWindow(tk.Tk):
         threading.Thread(target=run_watcher, daemon=True).start()
         self.console.log("YouTubeチャット監視を開始しました。(数秒間隔のポーリング方式です)")
 
-    def _handle_comment(self, platform, username, message, has_emote=False, emotes=None, badges=None):
+    def _handle_comment(self, platform, username, message, has_emote=False, emotes=None,
+                         badges=None, clips=None):
         """
         1件のコメントを受け取り、判定→翻訳→読み上げ→チャット欄反映まで行う。
 
@@ -985,9 +1261,14 @@ class MainWindow(tk.Tk):
           ([{"set_id":..., "version":..., "image_url":...}, ...])。
           image_urlはClient-ID未設定/取得失敗時はNoneになる。
           オーバーレイ側で、ユーザー名の隣にアイコンとして表示する。
+        clips: メッセージ中のTwitchクリップURL一覧
+          ([{"slug":..., "url":..., "thumbnail_url":...}, ...])。
+          thumbnail_urlはClient-ID未設定/取得失敗時はNoneになる。
+          オーバーレイ側で、サムネイル画像として表示する。
         """
         emotes = emotes or []
         badges = badges or []
+        clips = clips or []
         if self.selected_style_id is None:
             self.console.log("ボイスが選択されていません。VOICEVOXメニューから選んでください。", level="error")
             return
@@ -1077,7 +1358,8 @@ class MainWindow(tk.Tk):
                 )
 
             overlay_server.push_comment(
-                platform, username, original_for_display, translated, emotes=emotes, badges=badges,
+                platform, username, original_for_display, translated,
+                emotes=emotes, badges=badges, clips=clips,
             )
             chat_logger.log_comment(platform, username, original_for_display, translated)
 

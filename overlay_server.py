@@ -21,6 +21,7 @@ GUIの「表示」メニューの字幕トグルから set_display_mode() で切
 
 import logging
 import os
+import socket
 import threading
 import time
 
@@ -45,7 +46,8 @@ _comments = []  # {"platform":..., "user":..., "original":..., "translated":...,
 _display_mode = "translated"  # "off" / "translated" / "both"
 
 
-def push_comment(platform: str, user: str, original: str, translated: str, emotes=None, badges=None):
+def push_comment(platform: str, user: str, original: str, translated: str,
+                  emotes=None, badges=None, clips=None):
     """
     メイン画面側から、新しいコメントが処理されるたびに呼び出す。
 
@@ -60,6 +62,12 @@ def push_comment(platform: str, user: str, original: str, translated: str, emote
       image_urlがNoneのバッジ(Client-ID未設定時など)は、
       ブラウザ側で自然に無視される。ユーザー名の隣に、
       常時(設定のON/OFFなしで)表示する。
+    clips: メッセージ中のTwitchクリップURL一覧
+      ([{"slug":..., "url":..., "thumbnail_url":...}, ...])。
+      thumbnail_urlが取得できたものだけ、サムネイル画像として
+      コメントの下に表示する。デザイン設定の hide_clip_url が
+      ONの場合、サムネイルが取得できたクリップに限り、
+      本文中のURL文字列を取り除く。
     """
     with _state_lock:
         _comments.append({
@@ -69,6 +77,7 @@ def push_comment(platform: str, user: str, original: str, translated: str, emote
             "translated": translated,
             "emotes": emotes or [],
             "badges": badges or [],
+            "clips": clips or [],
             "ts": time.time(),
         })
         # 増えすぎないよう、直近の分だけ保持する
@@ -122,7 +131,7 @@ OVERLAY_HTML = """
         // モード + レイアウト設定 + コメント内容をキー化し、前回描画時と
         // 一致するならDOMには一切手を触れない(=アニメーションも再生されない)
         const key = data.mode + "::" + data.stacked_layout + "::" + data.show_original
-                  + "::" + JSON.stringify(data.comments);
+                  + "::" + data.hide_clip_url + "::" + JSON.stringify(data.comments);
         if (key === lastRenderedKey) {
           return;
         }
@@ -135,6 +144,7 @@ OVERLAY_HTML = """
 
           const emotes = c.emotes || [];
           const badges = c.badges || [];
+          const clips = c.clips || [];
 
           // Twitchのサブスク・モデレーター等のバッジは、実際のチャット欄と
           // 同じ感覚で使えるよう、常時(ON/OFFの設定なしで)表示する。
@@ -148,6 +158,65 @@ OVERLAY_HTML = """
             .join("");
           const userHtml = badgesHtml + escapeHtml(c.user);
 
+          // 【重要】クリップURLの文字を本文から取り除くのは、
+          // 「サムネイル画像がちゃんと手に入った場合」だけに限定する。
+          // 取得に失敗した(Client-ID未設定、クリップが削除済み等)クリップの
+          // URLまで消してしまうと、リンク自体が完全に失われてしまうため。
+          //
+          // 【重要・エモートとの位置ズレ対策】renderWithEmotesは、
+          // エモートの位置(文字インデックス)を「元の文章の文字数」を
+          // 基準に計算している。そのため、先にクリップURLの文字を
+          // 削ってしまうと、それより後ろにあるエモートの位置が
+          // ズレて壊れてしまう(同じメッセージにエモートとクリップURLが
+          // 両方含まれるケース)。stripClipUrlsAndAdjustEmotesは、
+          // URLを取り除きつつ、削除した文字数の分だけエモートの位置も
+          // 正しくずらして返す。
+          const resolvedClips = clips.filter(cl => cl.thumbnail_url);
+          const stripClipUrlsAndAdjustEmotes = (text, textEmotes) => {
+            if (!data.hide_clip_url || resolvedClips.length === 0) {
+              return {text, emotes: textEmotes};
+            }
+            const removals = [];
+            resolvedClips.forEach(cl => {
+              if (!cl.url) return;
+              const idx = text.indexOf(cl.url);
+              if (idx !== -1) {
+                removals.push({start: idx, end: idx + cl.url.length});
+              }
+            });
+            if (removals.length === 0) {
+              return {text, emotes: textEmotes};
+            }
+            removals.sort((a, b) => a.start - b.start);
+
+            let newText = "";
+            let cursor = 0;
+            removals.forEach(r => {
+              if (r.start < cursor) return;  // 重複範囲は無視
+              newText += text.slice(cursor, r.start);
+              cursor = r.end;
+            });
+            newText += text.slice(cursor);
+
+            const adjustedEmotes = (textEmotes || [])
+              .map(e => {
+                let shift = 0;
+                let overlaps = false;
+                removals.forEach(r => {
+                  if (r.end <= e.start) {
+                    shift += (r.end - r.start);
+                  } else if (r.start < e.end && r.end > e.start) {
+                    overlaps = true;  // URLとエモートの範囲が被る(通常は起きない)
+                  }
+                });
+                if (overlaps) return null;
+                return {...e, start: e.start - shift, end: e.end - shift};
+              })
+              .filter(e => e !== null);
+
+            return {text: newText, emotes: adjustedEmotes};
+          };
+
           // 【重要】main_window.py側で、エモートを含むコメントは
           // そもそも翻訳を挟まない設計にしている(翻訳するとエモート名が
           // 意味不明な訳文になり、かつ文字位置もズレてしまうため)。
@@ -157,7 +226,8 @@ OVERLAY_HTML = """
           // どちらであっても、renderWithEmotesで正確な位置に画像を
           // 差し込める(以前あった「末尾にまとめて添えるだけ」という
           // 妥協策は、この設計変更により不要になった)。
-          let translatedHtml = renderWithEmotes(c.translated, emotes);
+          const translatedStripped = stripClipUrlsAndAdjustEmotes(c.translated, emotes);
+          let translatedHtml = renderWithEmotes(translatedStripped.text, translatedStripped.emotes);
 
           // 【重要】以前は data.mode === "both" (メイン画面の「表示」
           // メニュー内の字幕モード)だけで原文表示の有無を判定しており、
@@ -166,6 +236,17 @@ OVERLAY_HTML = """
           // という指摘があった)。デザイン設定の「show_original」を
           // 直接見るようにし、ここで完結して切り替えられるようにする。
           const hasOriginal = data.show_original && !!c.original;
+          const originalStripped = hasOriginal
+            ? stripClipUrlsAndAdjustEmotes(c.original, emotes)
+            : null;
+
+          // クリップのサムネイルは、常時(設定のON/OFFなしで)表示を試みる。
+          // 複数貼られていれば、その分だけ並べて表示する。
+          const clipThumbsHtml = resolvedClips
+            .map(cl => `<img class="chat-clip-thumb" src="${cl.thumbnail_url}" `
+                     + `alt="Twitch clip" style="max-width:220px;border-radius:6px;`
+                     + `margin-top:4px;display:block;">`)
+            .join("");
 
           let html;
           if (data.stacked_layout) {
@@ -173,7 +254,7 @@ OVERLAY_HTML = """
             // を、それぞれ独立した行として縦に並べる。
             html = `<div class="chat-user-line">${userHtml}</div>`;
             if (hasOriginal) {
-              html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;
+              html += `<div class="chat-original">${renderWithEmotes(originalStripped.text, originalStripped.emotes)}</div>`;
               html += `<div class="chat-translated">${translatedHtml}</div>`;
             } else {
               html += `<div class="chat-translated">${translatedHtml}</div>`;
@@ -183,9 +264,10 @@ OVERLAY_HTML = """
             html = `<span class="chat-user">${userHtml}</span>${translatedHtml}`;
             if (hasOriginal) {
               // 原文側は、実際の文字位置に沿って正確にエモート画像を差し込める
-              html += `<div class="chat-original">${renderWithEmotes(c.original, emotes)}</div>`;
+              html += `<div class="chat-original">${renderWithEmotes(originalStripped.text, originalStripped.emotes)}</div>`;
             }
           }
+          html += clipThumbsHtml;
           line.innerHTML = html;
           container.appendChild(line);
         });
@@ -343,6 +425,7 @@ def api_comments():
     max_lines = design.get("max_lines", MAX_DISPLAY_LINES)
     stacked_layout = design.get("stacked_layout", False)
     show_original = design.get("show_original", True)
+    hide_clip_url = design.get("hide_clip_url", True)
 
     with _state_lock:
         recent = _comments[-max_lines:] if max_lines > 0 else []
@@ -350,6 +433,7 @@ def api_comments():
     return jsonify({
         "mode": mode, "comments": recent,
         "stacked_layout": stacked_layout, "show_original": show_original,
+        "hide_clip_url": hide_clip_url,
     })
 
 
@@ -370,7 +454,28 @@ def api_css_version():
     return jsonify({"version": version})
 
 
-def run_server(host="127.0.0.1", port=8765):
+DEFAULT_PORT = 8765  # オーバーレイサーバーの初期ポート番号
+
+
+def is_port_available(port, host="127.0.0.1"):
+    """
+    指定したポートが、他のアプリに使われておらず、このサーバーが
+    使える状態かどうかを返す。
+
+    実際にbindしてみて確かめる。SO_REUSEADDRは、Windowsでは使用中の
+    ポートにもbindできてしまい、判定を誤るため、意図的に設定しない。
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        sock.close()
+
+
+def run_server(host="127.0.0.1", port=DEFAULT_PORT):
     """
     メイン画面から別スレッドで呼び出す想定。
     Flaskの開発用サーバーで十分(ローカル配信ツールなので)。
@@ -392,6 +497,18 @@ if __name__ == "__main__":
             {"id": "25", "start": 0, "end": 4, "text": "Kappa"},
             {"id": "25", "start": 15, "end": 19, "text": "Kappa"},
         ],
+    )
+    # クリップURL + エモートが両方含まれるケースの表示確認用
+    # (位置ズレ補正が正しく効いているか確認するため)
+    clip_text = "Kappa look at this https://clips.twitch.tv/TestSlug123 amazing"
+    push_comment(
+        "twitch", "clip_user", "", clip_text,
+        emotes=[{"id": "25", "start": 0, "end": 4, "text": "Kappa"}],
+        clips=[{
+            "slug": "TestSlug123",
+            "url": "https://clips.twitch.tv/TestSlug123",
+            "thumbnail_url": "https://static-cdn.jtvnw.net/ttv-boxart/https%3A%2F%2Fclips-media-assets2.twitch.tv/test-preview-480x272.jpg",
+        }],
     )
     set_display_mode("both")
     print("http://127.0.0.1:8765/overlay をブラウザで開いて確認してください。")

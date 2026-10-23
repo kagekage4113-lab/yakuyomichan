@@ -29,6 +29,8 @@ import time
 
 import requests
 
+from resource_path import writable_path
+
 TOKEN_CONFIG_PATH = "token_config.json"
 API_BASE = "https://www.googleapis.com/youtube/v3"
 
@@ -36,9 +38,20 @@ _stop_flag = {"stop": False}
 
 
 def load_youtube_config():
-    if not os.path.exists(TOKEN_CONFIG_PATH):
+    """
+    【重要・不具合修正】twitch_watcher.py に以前あったのと同じ不具合。
+    以前はここで素の相対パス("token_config.json")のまま open() して
+    いたため、PyInstallerでビルドしたexeを実行した際に、実際の作業
+    フォルダ(カレントディレクトリ)がexeのあるフォルダと一致しない
+    場合(スタートメニューのショートカット経由での起動等)、
+    token_settings_window.py が writable_path() 経由で保存した場所と
+    ズレてしまい、「設定したのに見つからない」不具合につながっていた。
+    他の設定ファイルと同様、writable_path() を使うように統一する。
+    """
+    path = writable_path(TOKEN_CONFIG_PATH)
+    if not os.path.exists(path):
         return None
-    with open(TOKEN_CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     yt_conf = data.get("youtube", {})
     if not yt_conf.get("api_key") or not yt_conf.get("video_id"):
